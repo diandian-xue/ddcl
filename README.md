@@ -1,2 +1,32 @@
 # ddcl
-Dark Dragon engine core library, A lightweight thread and network framework.
+Dark Dragon Engine core library,
+A lightweight multi thread concurrent network framework.
+
+
+## 消息队列和线程
+核心设计参考云风的 skynet https://github.com/cloudwu/skynet,
+框架提供统一的跨平台 api 对线程和网络的访问，框架自行管理一些线程：
+工作线程，网络线程，计时器线程，监控线程。也可以自己创建自定义的线程。
+
+线程之间采用消息队列方式通信,单个消息队列称作一个"服务",
+服务有两种工作方式:
+1, 框架管理的工作线程自行运行,多个工作服务组成一个服务队列,
+工作线程轮流从服务队列里面取出一个运行一条或多条消息,运行结束后将服务添加到队列末尾.
+2, 自定义线程服务封装,通过创建非"工作服务"可以让自定义线程和其他线程/工作服务通信.
+
+
+## 定时器
+框架提供毫秒级的定时器，服务可以向定时器注册一个超时响应，
+超时后服务可以收到一条 "DDCL_CMD_TIMEOUT" 命令的消息。
+
+
+## 网络管理
+框架接管所有网络连接,并通过消息传递操作和通知.
+单独的网络线程管理所有连接,并自建id给上层隐藏底层 fd,
+底层支持 LINUX 的 epoll, BSD 的kevent, Windows 支持 select 的模拟。
+所有网络线程的消息都会发送到相应的操作服务,统一的消息命令为 "DDCL_CMD_SOCKET".
+
+
+## lua 绑定
+框架采用 lua 作为脚本语言,利用 lua 的 coroutine 机制将异步调用手动挂起,
+收到回复后继续运行.可以让一个异步调用看起来像是一个函数调用.

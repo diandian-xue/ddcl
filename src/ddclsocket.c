@@ -85,6 +85,7 @@ typedef struct tag_SocketThread{
     ddcl_SocketPoll * poll;
     ddcl_Thread thread;
     ddcl_Service svr;
+    int exit;
 }SocketThread;
 
 typedef struct tag_Socket{
@@ -122,7 +123,7 @@ static struct{
 } _H = { 0 };
 
 static SocketThread * _T;
-static dduint32 _thread_count = 0;
+static dduint32 _TCOUNT = 0;
 
 static void
 _rsp_socket(SocketThread * st, Socket * s,
@@ -181,7 +182,6 @@ _read_cache_buff(Socket * s, size_t sz){
             ddcl_free(tmp->buf);
             ddcl_free(tmp);
         }
-
     }
     return buf;
 }
@@ -319,7 +319,7 @@ _set_non_blocking (DDSOCK_FD fd) {
 
 static inline SocketThread *
 _st_find(ddcl_Socket h){
-    return &(_T[h % _thread_count]);
+    return &(_T[h % _TCOUNT]);
 }
 
 static void
@@ -333,7 +333,7 @@ _close_fd (DDSOCK_FD fd) {
 
 static void
 _add_in_poll(ddcl_Socket h, Socket * s, int evt){
-    unsigned hash = h % _thread_count;
+    unsigned hash = h % _TCOUNT;
     SocketThread * st = &(_T[hash]);
     s->st = st;
     s->poll_evt = evt;
@@ -477,13 +477,11 @@ _execute_event_on_fd_connected(SocketThread * st, Socket * s, int evt) {
         return;
     }
     if(evt & DDSOCKETPOLL_READ){
-
         ReadBuff * rb = s->rbuf;
         if(_read_buff_is_empty(s) && s->forward){
             _del_evt_in_poll(st->poll, s, DDSOCKETPOLL_READ);
             return;
         }
-
         size_t rlen;
         char * rbuf;
         int rsz;
@@ -496,7 +494,6 @@ _execute_event_on_fd_connected(SocketThread * st, Socket * s, int evt) {
                 rb = _pop_read_buff(s);
                 continue;
             }
-
             if (rb->sz == 0)
                 rlen = DEFAULT_RECV_SIZE;
             else
@@ -527,7 +524,6 @@ _execute_event_on_fd_connected(SocketThread * st, Socket * s, int evt) {
                 ddcl_free(rbuf);
             break;
         }
-
         if (s) {
             if (!rb)
                 _del_evt_in_poll(st->poll, s, DDSOCKETPOLL_READ);
@@ -669,19 +665,35 @@ _execute_event(SocketThread * st, ddcl_Socket h, int evt){
 
 static void
 _timeout_wait_poll(ddcl_Msg * msg){
-    ddcl_timeout(msg->self, NULL, 5);
     SocketThread * st = msg->ud;
+    if (st->exit) {
+        return;
+    }
+    ddcl_timeout(msg->self, NULL, 5);
     ddcl_SocketEvent evts[MAX_POLL_WAIT] = { 0 };
     ddcl_SocketEvent * e;
     ddcl_Socket h;
     int n = 0;
-    n = ddcl_wait_socket_poll(st->poll, evts, MAX_POLL_WAIT, 1);
-    for (int i = 0; i < n; i++) {
-        e = &(evts[i]);
-        h = (ddcl_Socket)e->ud;
-        _execute_event(st, h, e->evt);
+    for (;;){
+        n = ddcl_wait_socket_poll(st->poll, evts, MAX_POLL_WAIT, 1);
+        if(n < 1){
+            return;
+        }
+        for (int i = 0; i < n; i++) {
+            e = &(evts[i]);
+            h = (ddcl_Socket)e->ud;
+            _execute_event(st, h, e->evt);
+        }
     }
 }
+
+static void
+_exit_module(ddcl_Msg * msg){
+    SocketThread * st = msg->ud;
+    ddcl_free_socket_poll(st->poll);
+    ddcl_exit_service(st->svr);
+}
+
 
 static void *
 _socket_thread_fn (void * arg){
@@ -691,6 +703,7 @@ _socket_thread_fn (void * arg){
     ddcl_start(svr);
     return NULL;
 }
+
 
 static void
 _excute_read_cmd(SocketCmd * cmd, ddcl_Service source, ddcl_Session session){
@@ -873,19 +886,21 @@ _socket_svr_msg_cb(ddcl_Msg * msg){
     case DDCL_CMD_TIMEOUT:
         _timeout_wait_poll(msg);
         break;
+    case DDCL_CMD_EXIT:
+        _exit_module(msg);
+        break;
     default:
         assert(0);
         break;
     }
-    
 }
 
 DDCLAPI int
-ddcl_socket_module_init (ddcl * conf){
+ddcl_init_socket_module (ddcl * conf){
     dduint32 thread = conf->socket;
-    if(thread > 64)
+    if(thread > 64){
         thread = 64;
-
+    }
 #ifdef DDSYS_WIN
     WSADATA * lpwsaData = (WSADATA *)NULL;
     if (lpwsaData == NULL){
@@ -899,8 +914,7 @@ ddcl_socket_module_init (ddcl * conf){
         return 1;
     }
 #endif
-
-    _thread_count = thread;
+    _TCOUNT = thread;
     _H.hs = ddcl_new_storage(sizeof(Socket), STORAGE_INIT_SIZE);
     ddcl_init_rw(&(_H.lock));
 
@@ -912,8 +926,37 @@ ddcl_socket_module_init (ddcl * conf){
         st->svr = ddcl_new_service_not_worker(_socket_svr_msg_cb, st);
         ddcl_new_thread(&(st->thread), _socket_thread_fn, st, 0);
     }
-
     return 0;
+}
+
+DDCLAPI void
+ddcl_exit_socket_module (){
+    ddcl_Socket h;
+    Socket * s;
+    ddcl_wlock_rw(&(_H.lock));
+    ddcl_begin_storage(_H.hs);
+    while(ddcl_next_storage(_H.hs, &h, (void **)&s)){
+        SocketCmd cmd;
+        cmd.cmd = _SCMD_CLOSE;
+        cmd.h = h;
+        cmd.fd = s->fd;
+        ddcl_send_b(s->st->svr, 0, DDCL_PTYPE_SEND,
+            DDCL_CMD_SOCKET, 0, (char *)&cmd, sizeof(SocketCmd));
+    }
+    ddcl_wunlock_rw(&(_H.lock));
+
+    for (dduint32 i = 0; i < _TCOUNT; i ++){
+        SocketThread * st = &(_T[i]);
+        st->exit = 1;
+        ddcl_send(st->svr, 0, DDCL_PTYPE_SEND, DDCL_CMD_EXIT, 0, NULL, 0);
+    }
+
+    for (dduint32 i = 0; i < _TCOUNT; i++) {
+        SocketThread * st = &(_T[i]);
+        ddcl_join_thread(st->thread);
+    }
+
+    ddcl_free(_T);
 }
 
 DDCLAPI ddcl_Socket
@@ -1117,7 +1160,7 @@ ddcl_close_socket(ddcl_Socket fd, ddcl_Service from){
 DDCLAPI dduint32
 ddcl_getall_socket_count(){
     dduint32 count = 0;
-    for (dduint32 i = 0; i < _thread_count; i ++){
+    for (dduint32 i = 0; i < _TCOUNT; i ++){
         count += ddcl_get_socket_poll_count(_T[i].poll);
     }
     return count;

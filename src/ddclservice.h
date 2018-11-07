@@ -16,6 +16,9 @@ typedef void (*ddcl_ExitServiceCB)(ddcl_Service h, void * ud);
 DDCLAPI int
 ddcl_init_service_module (ddcl * conf);
 
+DDCLAPI void
+ddcl_exit_service_module ();
+
 DDCLAPI ddcl_Service
 ddcl_new_service (ddcl_MsgCB cb, void * ud);
 

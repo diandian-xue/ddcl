@@ -72,13 +72,13 @@ _callmsg_in_coroutine(ddcl_Msg * msg, void * fn_flag){
         lua_pop(L, 1);
     }
 
+    lua_pushlightuserdata(L, (void *)msg->data);
+    lua_pushinteger(L, msg->sz);
+    lua_pushinteger(L, msg->ptype);
+    lua_pushinteger(L, msg->cmd);
     lua_pushinteger(L, msg->self);
     lua_pushinteger(L, msg->from);
     lua_pushinteger(L, msg->session);
-    lua_pushinteger(L, msg->ptype);
-    lua_pushinteger(L, msg->cmd);
-    lua_pushlightuserdata(L, (void *)msg->data);
-    lua_pushinteger(L, msg->sz);
 
     int ret = lua_resume(L, NULL, 7);
     switch(ret){
@@ -221,7 +221,10 @@ l_exit_service_cb(ddcl_Service h, void * ud){
         lua_pop(L, 1);
      }
 
-    lua_close(L);
+    lua_settop(L, 0);
+    if (!ctx->be_main) {
+        lua_close(L);
+    }
     ddcl_free(ctx);
 }
 
@@ -309,7 +312,7 @@ l_start (lua_State * L){
 }
 
 static int
-l_exit (lua_State * L){
+l_exit_service (lua_State * L){
     FIND_CTX;
     ddcl_Service svr = ctx->svr;
     if(lua_gettop(L) > 0){
@@ -349,7 +352,8 @@ l_start_non_worker(lua_State * L){
     }
     lua_pop(L, 1);
 
-    luaL_checktype(L, 1, LUA_TFUNCTION);
+    int be_main = lua_toboolean(L, 1);
+    luaL_checktype(L, 2, LUA_TFUNCTION);
 
     Context * ctx = ddcl_malloc(sizeof(Context));
     ctx->is_worker = 0;
@@ -358,12 +362,13 @@ l_start_non_worker(lua_State * L){
     ddcl_exit_service_cb(svr, l_exit_service_cb);
     ctx->L = L;
     ctx->svr = svr;
+    ctx->be_main = be_main;
 
     lua_pushstring(L, LDDCL_CTX_K);
     lua_pushlightuserdata(L, ctx);
     lua_rawset(L, LUA_REGISTRYINDEX);
 
-    lua_pushvalue(L, 1);
+    lua_pushvalue(L, 2);
     lua_rawsetp(L, LUA_REGISTRYINDEX, &ctx->startfn);
 
     lua_newtable(L);
@@ -583,7 +588,7 @@ openlib_service (lua_State * L){
 
     DDLUA_PUSHFUNC(L, "new_service", l_new_service);
     DDLUA_PUSHFUNC(L, "start", l_start);
-    DDLUA_PUSHFUNC(L, "exit", l_exit);
+    DDLUA_PUSHFUNC(L, "exit_service", l_exit_service);
     DDLUA_PUSHFUNC(L, "callback", l_callback);
     DDLUA_PUSHFUNC(L, "start_non_worker", l_start_non_worker);
     DDLUA_PUSHFUNC(L, "send", l_send);

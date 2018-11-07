@@ -197,12 +197,27 @@ ddcl_expand_map(ddcl_Map * map, dduint32 sz){
 
     Entry * begin = map->iter;
     dduint32 index;
-    while(begin){
+	while(begin){
         index = begin->hash % sz;
         begin->next = nslot[index];
         nslot[index] = begin;
         begin = begin->iterNext;
     }
+	/*
+	*/
+
+	/*
+	for (int i = 0; i < map->slot_sz; i++) {
+		begin = map->slot[i];
+		while(begin){
+			index = begin->hash % sz;
+			begin->next = nslot[index];
+			nslot[index] = begin;
+			begin = begin->next;
+		}
+	}
+	*/
+
     free(map->slot);
     map->slot = nslot;
     map->slot_sz = sz;
@@ -218,13 +233,16 @@ ddcl_set_map (ddcl_Map * map, void * k, size_t ksz, void * data, size_t datasz){
     Entry * pre = NULL;
     while(entry){
         if(entry->hash != hash || !map->com_fn(entry->k, entry->ksz, k, ksz)){
-            pre = entry;
-            entry = entry->next;
+			pre = entry;
+			entry = entry->next;
             continue;
         }
+		if (entry->data && entry->datasz) {
+			free(entry->data);
+		}
         if(data){
             if (datasz){
-                entry->data = ddcl_malloc(datasz);
+                entry->data = malloc(datasz);
                 memcpy(entry->data, data, datasz);
             }else{
                 entry->data = data;
@@ -236,12 +254,13 @@ ddcl_set_map (ddcl_Map * map, void * k, size_t ksz, void * data, size_t datasz){
             pre->next = entry->next;
         if (entry == map->slot[index])
             map->slot[index] = entry->next;
+
         if (map->iter == entry)
-            map->iter = entry->next;
+            map->iter = entry->iterNext;
         if (map->iter_end == entry)
-            map->iter_end = pre;
+            map->iter_end = entry->iterLast;
         if (map->iter_cur == entry)
-            map->iter_cur = entry->next;
+            map->iter_cur = entry->iterNext;
         if(entry->iterLast)
             entry->iterLast->iterNext = entry->iterNext;
         if (entry->iterNext)
@@ -261,7 +280,7 @@ ddcl_set_map (ddcl_Map * map, void * k, size_t ksz, void * data, size_t datasz){
     memcpy(entry->k, k, ksz);
     entry->ksz = ksz;
     if (datasz){
-        entry->data = ddcl_malloc(datasz);
+        entry->data = malloc(datasz);
         memcpy(entry->data, data, datasz);
     }else{
         entry->data = data;
@@ -316,15 +335,16 @@ ddcl_next_map(ddcl_Map * map,
     void ** key, size_t * ksz, void ** data, size_t * datasz){
     if(map->iter_cur){
         *key = map->iter_cur->k;
-        *ksz = map->iter_cur->ksz;
+		if (ksz) { *ksz = map->iter_cur->ksz; }
         *data = map->iter_cur->data;
         if (datasz) *datasz = map->iter_cur->datasz;
         map->iter_cur = map->iter_cur->iterNext;
         return 1;
     }else{
         *key = NULL;
-        *ksz = 0;
+		if (ksz) { *ksz = 0; }
         *data = NULL;
+		if (datasz) { *datasz = 0; }
         return 0;
     }
 }

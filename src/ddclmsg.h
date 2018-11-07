@@ -9,6 +9,7 @@ enum {
 
 enum {
     DDCL_CMD_TEXT = 1,
+    DDCL_CMD_EXIT,
     DDCL_CMD_TIMEOUT,
     DDCL_CMD_ERROR,
     DDCL_CMD_SOCKET,
@@ -29,7 +30,7 @@ typedef struct tag_ddcl_Msg{
     ddcl_Service from;
     ddcl_Service self;
     ddcl_Session session;
-    const void * data;
+    void * data;
     size_t sz;
     int free;
 }ddcl_Msg;

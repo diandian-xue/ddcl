@@ -27,10 +27,11 @@ ddcl_err(int err){
         int e = _err_strs[i].e;
         if(e != -1 && err == e){
             return _err_strs[i].str;
-        }else{
+        }else if(e == -1){
             return _err_strs[i - 1].str;
         }
         i ++;
     }
+    return NULL;
 }
 

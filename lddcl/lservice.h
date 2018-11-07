@@ -8,6 +8,7 @@ typedef struct tag_Context{
     lua_State * L;
     ddcl_Service svr;
     int is_worker;
+	int be_main;
 
     int unknow;
     int startfn;

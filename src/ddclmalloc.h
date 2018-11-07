@@ -21,7 +21,10 @@
 #endif
 
 DDCLAPI int
-ddcl_malloc_module_init();
+ddcl_init_malloc_module ();
+
+DDCLAPI void
+ddcl_exit_malloc_module ();
 
 DDCLAPI void *
 ddcl_mallocR(size_t sz, char * r, int line);
@@ -31,3 +34,6 @@ ddcl_freeR(void * p);
 
 DDCLAPI void *
 ddcl_realloc(void * p, size_t sz);
+
+DDCLAPI void
+ddcl_print_malloc_info ();

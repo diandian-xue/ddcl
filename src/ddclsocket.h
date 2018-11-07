@@ -19,7 +19,10 @@ typedef struct tag_ddcl_SocketRsp{
 }ddcl_SocketRsp;
 
 DDCLAPI int
-ddcl_socket_module_init (ddcl * conf);
+ddcl_init_socket_module (ddcl * conf);
+
+DDCLAPI void
+ddcl_exit_socket_module ();
 
 DDCLAPI ddcl_Socket
 ddcl_connect_socket (ddcl_Service from, const char * host, dduint16 port, ddcl_Session session);

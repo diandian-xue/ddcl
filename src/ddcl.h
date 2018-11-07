@@ -10,7 +10,13 @@ typedef struct tag_ddcl{
 }ddcl;
 
 DDCLAPI int
-ddcl_init(ddcl * conf);
+ddcl_init (ddcl * conf);
 
 DDCLAPI void
-ddcl_default(ddcl * conf);
+ddcl_exit ();
+
+DDCLAPI void
+ddcl_final ();
+
+DDCLAPI void
+ddcl_default (ddcl * conf);

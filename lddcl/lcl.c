@@ -34,6 +34,18 @@ l_init (lua_State * L){
 }
 
 static int
+l_exit (lua_State * L){
+    ddcl_exit();
+    return 0;
+}
+
+static int
+l_final (lua_State * L){
+    ddcl_final();
+    return 0;
+}
+
+static int
 l_now (lua_State * L){
     lua_pushinteger(L, ddcl_now());
     return 1;
@@ -65,6 +77,8 @@ l_packstring(lua_State * L){
 
 static luaL_Reg _reg[] = {
     { "init", l_init },
+    { "exit", l_exit },
+    { "final", l_final },
     { "now", l_now },
     { "systime", l_systime },
     { "packstring", l_packstring },

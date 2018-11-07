@@ -2,6 +2,7 @@
 
 #include "ddcltimer.h"
 #include "ddclthread.h"
+#include "ddclmalloc.h"
 
 #ifdef DDSYS_WIN
 #include <Windows.h>
@@ -21,6 +22,8 @@ static struct {
     LARGE_INTEGER frequency;
     dduint64 startup;
 #endif
+    ddcl_Thread t;
+    int exit;
 } _T;
 
 #define TIME_NEAR_SHIFT     8
@@ -30,7 +33,7 @@ static struct {
 #define TIME_NEAR_MASK      (TIME_NEAR - 1)
 #define TIME_LEVEL_MASK     (TIME_LEVEL - 1)
 
-static dduint32 _MS; 
+static dduint32 _MS;
 
 typedef struct tag_Node{
     struct tag_Node * next;
@@ -131,7 +134,7 @@ _dispatch (Node * n){
                 DDCL_CMD_TIMEOUT, n->e.session, NULL, 0);
         Node * t = n;
         n = n->next;
-        free(t);
+        ddcl_free(t);
     } while (n);
 }
 
@@ -158,7 +161,7 @@ _update_timer (){
 
 static void *
 _timer_thread_fn (void * arg){
-    for (;;) {
+    while (!_T.exit) {
         dduint64 ct = ddcl_now();
         if (ct < _TR.current_point) {
             printf("time diff error: change from %lld to %lld \n", ct, _TR.current_point);
@@ -175,10 +178,11 @@ _timer_thread_fn (void * arg){
         }
         ddcl_signal_monitor();
     }
+	return NULL;
 }
 
 DDCLAPI int
-ddcl_timer_module_init (ddcl * conf){
+ddcl_init_timer_module (ddcl * conf){
     _MS = conf->timer_ms;
     memset(&_T, 0, sizeof(_T));
 #ifdef DDSYS_WIN
@@ -187,6 +191,7 @@ ddcl_timer_module_init (ddcl * conf){
     QueryPerformanceFrequency(&_T.frequency);
     _T.startup = ddcl_systime();
 #endif
+    _T.exit = 0;
 
     memset(&_TR, 0, sizeof(Timer));
     _TR.current_point = ddcl_now();
@@ -198,10 +203,35 @@ ddcl_timer_module_init (ddcl * conf){
             _clear_list(&(_TR.t[i][j]));
         }
     }
-
-    ddcl_Thread t;
-    ddcl_new_thread(&t, _timer_thread_fn, NULL, 0);
+    ddcl_new_thread(&(_T.t), _timer_thread_fn, NULL, 0);
     return 0;
+}
+
+DDCLAPI void
+ddcl_exit_timer_module (){
+    _T.exit = 1;
+    ddcl_join_thread(_T.t);
+
+    Node * node;
+    Node * tmp;
+    for(int i = 0; i < TIME_NEAR; i ++){
+        node = _TR.n[i].head.next;
+        while (node) {
+            tmp = node;
+            node = node->next;
+            ddcl_free(tmp);
+        }
+    }
+    for(int i = 0; i < 7; i ++){
+        for(int j = 0; j < TIME_LEVEL; j ++){
+            node = _TR.t[i][j].head.next;
+            while (node) {
+                tmp = node;
+                node = node->next;
+                ddcl_free(tmp);
+            }
+        }
+    }
 }
 
 DDCLAPI dduint64
@@ -238,7 +268,7 @@ ddcl_systime(){
 DDCLAPI void
 ddcl_add_timeout (ddcl_Handle h, ddcl_Session session, dduint32 ms){
     if (ms > 0) {
-        Node * n = malloc(sizeof(Node));
+        Node * n = ddcl_malloc(sizeof(Node));
         n->e.session = session;
         n->e.source = h;
         ddcl_lock_spin(&(_TR.lock));

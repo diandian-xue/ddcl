@@ -11,10 +11,23 @@
 
 static int
 l_parse_socket_rsp (lua_State * L){
+    const char * data = NULL;
     size_t sz;
-    const char * data = luaL_checklstring(L, 1, &sz);
+    switch(lua_type(L, 1)){
+    case LUA_TSTRING:
+        data = lua_tolstring(L, 1, &sz);
+        break;
+    case LUA_TUSERDATA:
+    case LUA_TLIGHTUSERDATA:
+        data = lua_touserdata(L, 1);
+        sz = luaL_checkinteger(L, 2);
+        break;
+    default:
+        return luaL_error(L, "param error #1, string or userdata got %s",
+                lua_typename(L, lua_type(L, 1)));
+        break;
+    }
     ddcl_SocketRsp * rsp = (ddcl_SocketRsp *)data;
-
     lua_pushinteger(L, rsp->fd);
     lua_pushinteger(L, rsp->cmd);
     if(rsp->cmd == DDCL_SOCKET_READ){
@@ -57,10 +70,6 @@ l_listen_socket (lua_State * L){
         return luaL_error(ctx->L, ddcl_err(err));
     }
     ddcl_Socket fd = ddcl_listen_socket(ctx->svr, host, port, backlog, session);
-    if(!fd){
-        lua_pushinteger(L, fd);
-        return 1;
-    }
     lua_pushinteger(L, fd);
     return 1;
 }

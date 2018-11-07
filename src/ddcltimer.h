@@ -6,7 +6,10 @@
 #include "ddclservice.h"
 
 DDCLAPI int
-ddcl_timer_module_init(ddcl * conf);
+ddcl_init_timer_module (ddcl * conf);
+
+DDCLAPI void
+ddcl_exit_timer_module ();
 
 DDCLAPI dduint64
 ddcl_now ();

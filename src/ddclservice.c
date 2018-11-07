@@ -58,6 +58,7 @@ static struct tag_Monitor{
     ddcl_Map * t_map;
     ddcl_SpinLock t_lock;
     ddcl_Cond cond;
+    int exit;
 } _M;
 
 static void
@@ -152,7 +153,7 @@ _push_service_queue (Service * svr, ddcl_Service self, int ptype,
     msg->from = self;
     msg->self = svr->handle;
     msg->session = session;
-    msg->data = data;
+    msg->data = (void *)data;
     msg->sz = sz;
     msg->cmd = cmd;
     msg->free = free;
@@ -199,12 +200,21 @@ _pop_service_queue (Service * svr, ddcl_Msg * msg, int max) {
 
 static void
 _free_service_queue (Service * svr){
-    ddcl_log(svr->handle, "exit svr %ld", svr->handle);
-    ddcl_destroy_spin(&(svr->lock));
-    ddcl_free(svr->queue);
-    if(svr->exit_cb){
+    if (svr->exit_cb) {
         svr->exit_cb(svr->handle, svr->ud);
     }
+    ddcl_destroy_spin(&(svr->lock));
+    ddcl_Msg * msg;
+    while (svr->head != svr->tail) {
+        msg = &(svr->queue[svr->head++]);
+        if(msg->data && msg->free){
+            ddcl_free((void *)msg->data);
+        }
+        if (svr->head >= svr->cap) {
+            svr->head = 0;
+        }
+    }
+    ddcl_free(svr->queue);
     _delete_handle(svr->handle);
 }
 
@@ -226,12 +236,8 @@ _dispatch_global_queue (){
         return 0;
     }
     for (int i = 0; i < ret; i ++){
-        if (svr->exit) {
-            break;
-        }
         _dispatch_msg(svr, &(msg[i]));
     }
-
     if (svr->exit) {
         _free_service_queue(svr);
     }else {
@@ -263,8 +269,8 @@ static void *
 _service_thread_fn (void * arg){
     MsgQueue * q = NULL;
     int non_count = 0;
-    for(;;){
-        while(!_dispatch_global_queue()){
+    while(!_M.exit){
+        while(!_dispatch_global_queue() && !_M.exit){
             ddcl_wait_time_cond(&(_M.cond), DDCLSERVICE_WAITMS);
         }
     }
@@ -279,16 +285,41 @@ ddcl_init_service_module (ddcl * conf){
     _H.hs = ddcl_new_storage(sizeof(Service), 0xFF + 1);
     ddcl_init_rw(&(_H.lock));
 
+    _M.exit = 0;
     _M.t_map = ddcl_new_map(NULL, NULL);
+    ddcl_expand_map(_M.t_map, 64);
     ddcl_init_spin(&(_M.t_lock));
     ddcl_init_cond(&(_M.cond));
 
+    int bworker = 1;
     for (dduint32 i = 0; i < conf->worker; i ++){
         ddcl_Thread t;
         ddcl_new_thread(&t, _service_thread_fn, NULL, 0);
-        ddcl_set_map(_M.t_map, &t, sizeof(t), &t, sizeof(t));
+        ddcl_set_map(_M.t_map, &t, sizeof(t), &bworker, sizeof(int));
     }
     return 0;
+}
+
+DDCLAPI void
+ddcl_exit_service_module (){
+    _M.exit = 1;
+    ddcl_begin_map(_M.t_map);
+    ddcl_Thread * thread;
+    int * bworker = 0;
+    while(ddcl_next_map(_M.t_map, &thread, NULL, (void **)&bworker, NULL)){
+        if(*bworker){
+            ddcl_join_thread(*thread);
+        }
+    }
+
+    ddcl_begin_storage(_H.hs);
+    Service * svr;
+    ddcl_Handle h;
+    while(ddcl_next_storage(_H.hs, &h, (void **)&svr)){
+        if (svr->global) {
+            _free_service_queue(svr);
+        }
+    }
 }
 
 DDCLAPI int
@@ -357,7 +388,7 @@ ddcl_send_b (ddcl_Service to, ddcl_Service self, int ptype,
     }
     char * buf = NULL;
     if (data){
-        buf = malloc(sz);
+        buf = ddcl_malloc(sz);
         memcpy(buf, data, sz);
     }
     _push_service_queue(tos, self, ptype, cmd, session, buf, sz, 1);
@@ -398,7 +429,7 @@ ddcl_call_b (ddcl_Service to, ddcl_Service self, int ptype,
     *session = _new_session (selfs);
     char * buf = NULL;
     if (data){
-        buf = malloc(sz);
+        buf = ddcl_malloc(sz);
         memcpy(buf, data, sz);
     }
     _push_service_queue(tos, self, ptype, cmd, *session, buf, sz, 1);
@@ -453,24 +484,29 @@ ddcl_start (ddcl_Service h){
         ddcl_unlock_spin(&(_M.t_lock));
         return DDCL_SERVICE_THREAD_IS_REGISTERED;
     }
-    ddcl_set_map(_M.t_map, &t, sizeof(t), &t, sizeof(t));
+    int bworker = 0;
+    ddcl_set_map(_M.t_map, &t, sizeof(t), &bworker, sizeof(int));
     ddcl_unlock_spin(&(_M.t_lock));
 
     ddcl_Msg msg[8];
-    for(;;){
+    while(!svr->exit){
         int ret = _pop_service_queue(svr, msg, 8);
-        while (ret) {
+        while (ret && !svr->exit) {
             for (int i = 0; i < ret; i++){
-                if(svr->exit){
-                    ddcl_log(h, "exit service %ld", h);
-                    return 0;
-                }
                 _dispatch_msg(svr, &(msg[i]));
             }
             ret = _pop_service_queue(svr, msg, 8);
         }
+        if (ret) {
+            for (int i = 0; i < ret; i++) {
+                if (msg[i].data && msg[i].free) {
+                    ddcl_free(msg[i].data);
+                }
+            }
+        }
         ddcl_wait_time_cond(&(_M.cond), DDCLSERVICE_WAITMS);
     }
+    _free_service_queue(svr);
     return 0;
 }
 

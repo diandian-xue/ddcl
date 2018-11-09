@@ -76,9 +76,9 @@ _callmsg_in_coroutine(ddcl_Msg * msg, void * fn_flag){
     lua_pushinteger(L, msg->sz);
     lua_pushinteger(L, msg->ptype);
     lua_pushinteger(L, msg->cmd);
+    lua_pushinteger(L, msg->session);
     lua_pushinteger(L, msg->self);
     lua_pushinteger(L, msg->from);
-    lua_pushinteger(L, msg->session);
 
     int ret = lua_resume(L, NULL, 7);
     switch(ret){
@@ -312,7 +312,14 @@ l_start (lua_State * L){
 }
 
 static int
-l_exit_service (lua_State * L){
+l_self (lua_State * L){
+    FIND_CTX;
+    lua_pushinteger(L, ctx->svr);
+    return 1;
+}
+
+static int
+l_exit (lua_State * L){
     FIND_CTX;
     ddcl_Service svr = ctx->svr;
     if(lua_gettop(L) > 0){
@@ -587,8 +594,9 @@ openlib_service (lua_State * L){
 
 
     DDLUA_PUSHFUNC(L, "new_service", l_new_service);
+    DDLUA_PUSHFUNC(L, "self", l_self);
     DDLUA_PUSHFUNC(L, "start", l_start);
-    DDLUA_PUSHFUNC(L, "exit_service", l_exit_service);
+    DDLUA_PUSHFUNC(L, "exit", l_exit);
     DDLUA_PUSHFUNC(L, "callback", l_callback);
     DDLUA_PUSHFUNC(L, "start_non_worker", l_start_non_worker);
     DDLUA_PUSHFUNC(L, "send", l_send);

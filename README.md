@@ -30,3 +30,96 @@ A lightweight multi thread concurrent network framework.
 ## lua 绑定
 框架采用 lua 作为脚本语言,利用 lua 的 coroutine 机制将异步调用手动挂起,
 收到回复后继续运行.可以让一个异步调用看起来像是一个函数调用.
+
+## BUILD
+
+### WINDOWS
+cmake -DBUILD_SHARED_LIBS=1
+MSBuild ddcl.sln
+
+### LINUX
+cmake -DLINUX=1 -DBUILD_SHARED_LIBS=1
+make
+
+### MACOS
+cmake -DAPPLE=1 -DBUILD_SHARED_LIBS=1
+make
+
+
+
+## EXAMPLE
+``` lua
+
+local ddcl = require "lddcl.core"
+
+local conf = {
+    worker = 1, --工作线程数量
+    socket = 1, -- 网络管理线程数量
+    timer_ms = 1, -- 计时器线程休眠毫秒数
+}
+ddcl.init(conf)
+
+-- true 表示当前是主线程服务，退出服务器后不会自动 close lua 虚拟机
+-- function 会在新的 coroutine 里面运行
+ddcl.start_non_worker(true , function(data, sz)
+    ddcl.log("start main service:", ddcl.self())
+    -- 注册一个消息接收回调
+    ddcl.callback(function(data, sz, ptype, cmd, session, self, from)
+        ddcl.log("some msg to callback",
+            data, sz, ptype, cmd, session, self, from)
+        if session > 0 then
+            ddcl.resp("resp success")
+        end
+    end)
+
+    ddcl.send(ddcl.self(), "send self a msg")
+    ddcl.call(ddcl.self(), "call self a msg")
+
+    ddcl.fork(function()
+        ddcl.log("run in new coroutine")
+    end)
+    ddcl.timeout(1000, function()
+        ddcl.log("run in after 1000ms timeout")
+    end)
+
+    ddcl.co_sleep(1000)
+    ddcl.log("run in after 1000ms sleep")
+
+    local listen = ddcl.listen_socket("0.0.0.0", 10000, 1000)
+    assert(listen > 0, "error listen")
+    local close = false
+    while not close do
+        local rsp, sz = ddcl.accept_socket(listen)
+        local fd, cmd = ddcl.parse_socket_rsp(rsp, sz)
+        ddcl.fork(function()
+            ddcl.send_socket(fd, "hello client\n")
+            while true do
+                local rsp, sz = ddcl.read_socket(fd, 0)
+                local fd, cmd, data = ddcl.parse_socket_rsp(rsp, sz)
+                if cmd == ddcl.DDCL_SOCKET_ERROR then
+                    break
+                end
+                if string.sub(data, 1, 5) == "close" then
+                    ddcl.log("close socket:", fd)
+                    ddcl.close_socket(fd)
+                    break
+                elseif string.sub(data, 1, 5) == "final" then
+                    ddcl.log("final socket:", fd)
+                    ddcl.close_socket(fd)
+                    ddcl.exit()
+                else
+                    ddcl.log("recv socket:", fd, data)
+                    ddcl.send_socket(fd, "rsp pong\n")
+                end
+            end
+
+        end)
+    end
+
+    ddcl.exit()
+end)
+
+ddcl.final()
+
+```
+

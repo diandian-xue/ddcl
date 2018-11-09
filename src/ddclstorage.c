@@ -1,6 +1,9 @@
 ﻿#define DDCL_CORE
 
+#include "ddcl.h"
 #include "ddclstorage.h"
+#include "ddclmalloc.h"
+#include "ddclthread.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -31,6 +34,13 @@ struct tag_ddcl_Storage{
     Block * block_cur;
 };
 
+#ifdef DDMALLOC_RECORD
+struct {
+    ddcl_SpinLock lock;
+    ddcl_Map * map;
+}_R;
+#endif
+
 #define MAX_EXPEND_SIZE     10000
 
 static Slot *
@@ -38,8 +48,8 @@ _new_slot(dduint32 ele_sz, dduint32 size) {
     if(size > MAX_EXPEND_SIZE){
         size = MAX_EXPEND_SIZE;
     }
-    Slot * s = malloc(sizeof(Slot));
-    s->buf = malloc((sizeof(Block) + ele_sz) * size);
+    Slot * s = ddcl_malloc(sizeof(Slot));
+    s->buf = ddcl_malloc((sizeof(Block) + ele_sz) * size);
     memset(s->buf, 0, (sizeof(Block) + ele_sz) * size);
     s->size = size;
     s->next = NULL;
@@ -51,9 +61,9 @@ _free_slot(Slot * s) {
     Slot * tmp;
     while (s) {
         tmp = s;
-        free(s->buf);
-        free(tmp);
         s = s->next;
+        ddcl_free(tmp->buf);
+        ddcl_free(tmp);
     }
 }
 
@@ -99,11 +109,44 @@ _find_in_slot(ddcl_Storage * hs, ddcl_Handle h) {
     return NULL;
 }
 
+DDCLAPI int
+ddcl_init_storage_module (ddcl * conf){
+#ifdef DDMALLOC_RECORD
+    _R.map = ddcl_new_map(NULL, NULL);
+    ddcl_expand_map(_R.map, 128);
+    ddcl_init_spin(&(_R.lock));
+#endif
+    return 0;
+}
+
+DDCLAPI void
+ddcl_exit_storage_module (){
+#ifdef DDMALLOC_RECORD
+    ddcl_free_map(_R.map);
+    ddcl_destroy_spin(&(_R.lock));
+#endif
+}
+
+DDCLAPI void
+ddcl_print_storage_info (){
+#ifdef DDMALLOC_RECORD
+    ddcl_lock_spin(&(_R.lock));
+    ddcl_begin_map(_R.map);
+    char * s;
+    void * p;
+    while(ddcl_next_map(_R.map, &p, NULL, (void **)&s, NULL)){
+        printf("malloc leaked:%p %s\n", (void *)(void **)p, s);
+    }
+    fflush(stdout);
+    ddcl_unlock_spin(&(_R.lock));
+#endif
+}
+
 DDCLAPI ddcl_Storage *
-ddcl_new_storage (unsigned ele_sz, unsigned initSize){
+ddcl_new_storage_real (unsigned ele_sz, unsigned initSize){
     if (initSize < 1)
         initSize = 1;
-    ddcl_Storage * hs = malloc(sizeof(ddcl_Storage));
+    ddcl_Storage * hs = ddcl_malloc(sizeof(ddcl_Storage));
     memset(hs, 0, sizeof(ddcl_Storage));
     hs->h_index = 0;
     hs->size = initSize;
@@ -116,11 +159,17 @@ ddcl_new_storage (unsigned ele_sz, unsigned initSize){
 DDCLAPI void
 ddcl_free_storage (ddcl_Storage * hs){
     _free_slot(hs->slot);
-    free(hs);
+    ddcl_free(hs);
+
+#ifdef DDMALLOC_RECORD
+    ddcl_lock_spin(&(_R.lock));
+    ddcl_set_map(_R.map, &hs, sizeof(void *), NULL, 0);
+    ddcl_unlock_spin(&(_R.lock));
+#endif
 }
 
 DDCLAPI ddcl_Handle
-ddcl_register_in_storage (ddcl_Storage * hs, void ** p){
+ddcl_register_in_storage_real (ddcl_Storage * hs, void ** p){
     ddcl_Handle handle;
     char * buf;
     dduint32 h_index = hs->h_index;
@@ -198,3 +247,25 @@ ddcl_next_storage(ddcl_Storage * hs, ddcl_Handle * h, void ** p){
     hs->block_cur = cur->next;
     return 1;
 }
+
+#ifdef DDMALLOC_RECORD
+
+DDCLAPI ddcl_Storage *
+ddcl_new_storage_record (
+        unsigned ele_sz, unsigned init_count, char * file, int line){
+    ddcl_Storage * s = ddcl_new_storage_real(ele_sz, init_count);
+    char info[256];
+    snprintf(info, 256, "%s:%d", file, line);
+    ddcl_lock_spin(&(_R.lock));
+    ddcl_set_map(_R.map, &s, sizeof(ddcl_Storage *), info, 256);
+    ddcl_unlock_spin(&(_R.lock));
+    return s;
+}
+
+DDCLAPI ddcl_Handle
+ddcl_register_in_storage_record (
+        ddcl_Storage * s, void ** p, char * file, int line){
+    return ddcl_register_in_storage_real(s, p);
+}
+
+#endif

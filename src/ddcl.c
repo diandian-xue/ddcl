@@ -15,6 +15,7 @@
 DDCLAPI int
 ddcl_init (ddcl * conf){
     CKRETURN(ddcl_init_malloc_module);
+    CKRETURN(ddcl_init_storage_module);
     CKRETURN(ddcl_file_module_init);
     CKRETURN(ddcl_init_service_module);
     CKRETURN(ddcl_init_log_module);
@@ -24,14 +25,13 @@ ddcl_init (ddcl * conf){
 }
 
 DDCLAPI void
-ddcl_exit (){
+ddcl_final (){
     ddcl_exit_socket_module();
     ddcl_exit_service_module();
     ddcl_exit_timer_module();
-}
 
-DDCLAPI void
-ddcl_final (){
+    ddcl_print_storage_info();
+    ddcl_exit_storage_module();
     ddcl_print_malloc_info();
     ddcl_exit_malloc_module();
 }

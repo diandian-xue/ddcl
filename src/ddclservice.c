@@ -320,6 +320,7 @@ ddcl_exit_service_module (){
             _free_service_queue(svr);
         }
     }
+    ddcl_free_storage(_H.hs);
 }
 
 DDCLAPI int

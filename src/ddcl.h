@@ -13,9 +13,6 @@ DDCLAPI int
 ddcl_init (ddcl * conf);
 
 DDCLAPI void
-ddcl_exit ();
-
-DDCLAPI void
 ddcl_final ();
 
 DDCLAPI void

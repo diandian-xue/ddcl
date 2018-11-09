@@ -29,7 +29,7 @@
 
 #define MAX_POLL_WAIT  64
 #define STORAGE_INIT_SIZE 512
-#define DEFAULT_RECV_SIZE 512
+#define DEFAULT_RECV_SIZE 1024
 
 enum {
     _SS_CONNECTING = 1,
@@ -99,7 +99,7 @@ typedef struct tag_Socket{
     ddcl_Session session;
     SocketThread * st;
 
-    char * crbuf;
+    char crbuf[DEFAULT_RECV_SIZE];
     CacheBuff * cbuf;
     CacheBuff * cbuf_end;
     size_t cbuf_sz;
@@ -221,10 +221,12 @@ _push_cache_buff(Socket * s, char * buf, size_t sz, int bcopy){
 }
 
 static void
-_free_read_buff(ReadBuff * rb){
+_free_read_buff (Socket * s, ReadBuff * rb){
     ReadBuff * tmp;
     while(rb){
         tmp = rb;
+        _rsp_read(s->st->svr, s->h, rb->source,
+            rb->session, DDCL_SOCKET_ERROR, NULL, 0);
         rb = rb->next;
         ddcl_free(tmp);
     }
@@ -253,12 +255,14 @@ _push_read_buff (Socket * s, size_t sz, ddcl_Service source, ddcl_Session sessio
 
 static ReadBuff *
 _pop_read_buff(Socket * s){
-    ReadBuff * rb = s->rbuf;
-    if(rb){
-        if(rb == s->rbuf_end)
+    if(s->rbuf){
+        if (s->rbuf == s->rbuf_end) {
             s->rbuf_end = s->rbuf_end->next;
+        }
+        ReadBuff * rb = s->rbuf;
         s->rbuf = s->rbuf->next;
-        return rb->next;
+        ddcl_free(rb);
+        return s->rbuf;
     }
     return NULL;
 }
@@ -337,7 +341,7 @@ _add_in_poll(ddcl_Socket h, Socket * s, int evt){
     SocketThread * st = &(_T[hash]);
     s->st = st;
     s->poll_evt = evt;
-    ddcl_add_in_socket_poll(st->poll, s->fd, evt, ((char *)0) + h);
+    ddcl_add_in_socket_poll(st->poll, s->fd, evt, s);
 }
 
 static void
@@ -346,7 +350,7 @@ _add_evt_2_poll(ddcl_SocketPoll * poll, Socket * s, int evt){
     if(s->poll_evt == e)
         return;
     s->poll_evt = e;
-    ddcl_set_evt_in_socket_poll(poll, s->fd, e, ((char *)0) + s->h);
+    ddcl_set_evt_in_socket_poll(poll, s->fd, e, s);
 }
 
 static void
@@ -355,7 +359,7 @@ _del_evt_in_poll(ddcl_SocketPoll * poll, Socket * s, int evt){
     if(s->poll_evt == e)
         return;
     s->poll_evt = e;
-    ddcl_set_evt_in_socket_poll(poll, s->fd, e, ((char *)0) + s->h);
+    ddcl_set_evt_in_socket_poll(poll, s->fd, e, s);
 }
 
 static Socket *
@@ -368,30 +372,20 @@ _register_fd(DDSOCK_FD fd, int status){
     s->fd = fd;
     s->h = h;
     s->status = status;
-    s->crbuf = ddcl_malloc(DEFAULT_RECV_SIZE);
     return s;
 }
 
 static void
 _del_fd (Socket * s){
-    _free_cache_buff(s->cbuf);
-    ddcl_free(s->crbuf);
-
     ddcl_del_in_socket_poll(s->st->poll, s->fd);
     _close_fd(s->fd);
+    _free_cache_buff(s->cbuf);
+    _free_read_buff(s, s->rbuf);
 
     if(s->forward){
         _rsp_socket(s->st, s, s->source, 0, DDCL_SOCKET_ERROR);
     }
-    ReadBuff * tmp;
-    ReadBuff * rb = s->rbuf;
-    while (rb) {
-        tmp = rb;
-        _rsp_read(s->st->svr, s->h, rb->source,
-            rb->session, DDCL_SOCKET_ERROR, NULL, 0);
-        rb = rb->next;
-        ddcl_free(tmp);
-    }
+
     ddcl_wlock_rw(&(_H.lock));
     ddcl_del_in_storage(_H.hs, s->h);
     ddcl_wunlock_rw(&(_H.lock));
@@ -638,10 +632,13 @@ _execute_event_in_fd_close(SocketThread * st, Socket * s, int evt){
 }
 
 static void
-_execute_event(SocketThread * st, ddcl_Socket h, int evt){
+_execute_event(SocketThread * st, Socket * s/*ddcl_Socket h*/, int evt){
+    /*
     Socket * s = _find_socket(h);
-    if(!s)
+    if(!s){
         return;
+    }
+     */
     switch(s->status){
     case _SS_CONNECTING:
         _execute_event_in_fd_connecting(st, s, evt);
@@ -672,7 +669,8 @@ _timeout_wait_poll(ddcl_Msg * msg){
     ddcl_timeout(msg->self, NULL, 5);
     ddcl_SocketEvent evts[MAX_POLL_WAIT] = { 0 };
     ddcl_SocketEvent * e;
-    ddcl_Socket h;
+    //ddcl_Socket h;
+    Socket * s;
     int n = 0;
     for (;;){
         n = ddcl_wait_socket_poll(st->poll, evts, MAX_POLL_WAIT, 1);
@@ -681,8 +679,8 @@ _timeout_wait_poll(ddcl_Msg * msg){
         }
         for (int i = 0; i < n; i++) {
             e = &(evts[i]);
-            h = (ddcl_Socket)e->ud;
-            _execute_event(st, h, e->evt);
+            s = (Socket *)e->ud;
+            _execute_event(st, s, e->evt);
         }
     }
 }
@@ -721,7 +719,6 @@ _excute_read_cmd(SocketCmd * cmd, ddcl_Service source, ddcl_Session session){
             DDCL_CMD_ERROR, session, err, strlen(err) + 1);
         return;
     }
-
 
     size_t sz = cmd->sz;
     if(!_read_buff_is_empty(s)){
@@ -800,6 +797,8 @@ _excute_close_cmd(SocketCmd * cmd, ddcl_Service source, ddcl_Session session){
     Socket * s = _find_socket(cmd->h);
     if(s && s->fd == cmd->fd){
         _del_fd(s);
+    }else{
+        printf("unknow fd be close %ld\n", cmd->h);
     }
 }
 
@@ -931,20 +930,6 @@ ddcl_init_socket_module (ddcl * conf){
 
 DDCLAPI void
 ddcl_exit_socket_module (){
-    ddcl_Socket h;
-    Socket * s;
-    ddcl_wlock_rw(&(_H.lock));
-    ddcl_begin_storage(_H.hs);
-    while(ddcl_next_storage(_H.hs, &h, (void **)&s)){
-        SocketCmd cmd;
-        cmd.cmd = _SCMD_CLOSE;
-        cmd.h = h;
-        cmd.fd = s->fd;
-        ddcl_send_b(s->st->svr, 0, DDCL_PTYPE_SEND,
-            DDCL_CMD_SOCKET, 0, (char *)&cmd, sizeof(SocketCmd));
-    }
-    ddcl_wunlock_rw(&(_H.lock));
-
     for (dduint32 i = 0; i < _TCOUNT; i ++){
         SocketThread * st = &(_T[i]);
         st->exit = 1;
@@ -955,6 +940,16 @@ ddcl_exit_socket_module (){
         SocketThread * st = &(_T[i]);
         ddcl_join_thread(st->thread);
     }
+
+    ddcl_Socket h;
+    Socket * s;
+    ddcl_begin_storage(_H.hs);
+    while(ddcl_next_storage(_H.hs, &h, (void **)&s)){
+        _close_fd(s->fd);
+        _free_cache_buff(s->cbuf);
+        _free_read_buff(s, s->rbuf);
+    }
+    ddcl_free_storage(_H.hs);
 
     ddcl_free(_T);
 }

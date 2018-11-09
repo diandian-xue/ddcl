@@ -49,9 +49,7 @@ make
 
 ## EXAMPLE
 ``` lua
-
 local ddcl = require "lddcl.core"
-
 local conf = {
     worker = 1, --工作线程数量
     socket = 1, -- 网络管理线程数量
@@ -91,6 +89,9 @@ ddcl.start_non_worker(true , function(data, sz)
     while not close do
         local rsp, sz = ddcl.accept_socket(listen)
         local fd, cmd = ddcl.parse_socket_rsp(rsp, sz)
+        if cmd == ddcl.DDCL_SOCKET_ERROR then
+            break
+        end
         ddcl.fork(function()
             ddcl.send_socket(fd, "hello client\n")
             while true do
@@ -106,7 +107,9 @@ ddcl.start_non_worker(true , function(data, sz)
                 elseif string.sub(data, 1, 5) == "final" then
                     ddcl.log("final socket:", fd)
                     ddcl.close_socket(fd)
-                    ddcl.exit()
+                    ddcl.close_socket(listen)
+                    close = true
+                    break
                 else
                     ddcl.log("recv socket:", fd, data)
                     ddcl.send_socket(fd, "rsp pong\n")
@@ -115,11 +118,8 @@ ddcl.start_non_worker(true , function(data, sz)
 
         end)
     end
-
     ddcl.exit()
 end)
-
 ddcl.final()
-
 ```
 

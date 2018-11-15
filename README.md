@@ -34,22 +34,27 @@ A lightweight multi thread concurrent network framework.
 ## BUILD
 
 ### WINDOWS
+```
 cmake -DBUILD_SHARED_LIBS=1
 MSBuild ddcl.sln
+```
 
 ### LINUX
+```
 cmake -DLINUX=1 -DBUILD_SHARED_LIBS=1
 make
+```
 
 ### MACOS
+```
 cmake -DAPPLE=1 -DBUILD_SHARED_LIBS=1
 make
+```
 
 
 
 ## EXAMPLE
 ``` lua
-local ddcl = require "lddcl.core"
 local conf = {
     worker = 1, --工作线程数量
     socket = 1, -- 网络管理线程数量
@@ -122,4 +127,5 @@ ddcl.start_non_worker(true , function(data, sz)
 end)
 ddcl.final()
 ```
-
+#### RUN
+lddcl main.lua

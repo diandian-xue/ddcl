@@ -41,7 +41,7 @@ endif()
 add_library(lua-cjson ${SOURCES} ${FPCONV_SOURCES})
 set_target_properties(lua-cjson PROPERTIES PREFIX "")
 set_target_properties(lua-cjson PROPERTIES OUTPUT_NAME cjson)
-target_include_directories(lua-cjson PUBLIC ${LUA_INCLUDE_DIR})
+#target_include_directories(lua-cjson PUBLIC ${LUA_INCLUDE_DIR})
 
 if(${BUILD_SHARED_LIBS})
     target_compile_definitions(lua-cjson PUBLIC LUA_CJSON_EXPORTS)
@@ -65,9 +65,9 @@ if(APPLE)
     target_link_libraries(lua-cjson PUBLIC lualib)
 endif()
 
+target_link_libraries(lua-cjson lualib)
 if(WIN32)
     # Win32 modules need to be linked to the Lua library.
-    target_link_libraries(lua-cjson lualib)
     # Windows sprintf()/strtod() handle NaN/inf differently. Not supported.
     #add_definitions(-DDISABLE_INVALID_NUMBERS)
 	list(APPEND CJSON_PRIVATE_DEFINITIONS DISABLE_INVALID_NUMBERS)

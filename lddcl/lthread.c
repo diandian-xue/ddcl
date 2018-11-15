@@ -29,7 +29,7 @@ _exc_thread_fn(Param * p){
         const char * traceback = lua_tostring(L, -1);
         printf("thread do string err:%s\n", traceback);
     }
-T_END:  
+T_END:
     ddcl_free(p->script);
     ddcl_free(p->param);
     ddcl_free(p);

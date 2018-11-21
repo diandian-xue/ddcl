@@ -1,7 +1,7 @@
 #define DDCLLUA_CORE
 
 #include "lcl.h"
-#include "lservice.h"
+#include "lddclservice.h"
 
 #include "ddclsocket.h"
 #include "ddclerr.h"
@@ -40,7 +40,7 @@ l_parse_socket_rsp (lua_State * L){
 
 static int
 l_connect_socket (lua_State * L){
-    FIND_CTX;
+    LDDCL_FIND_CTX;
     const char * host = luaL_checkstring(L, 1);
     dduint16 port = (dduint16)luaL_checkinteger(L, 2);
     ddcl_Session session;
@@ -53,12 +53,12 @@ l_connect_socket (lua_State * L){
     if(fd == 0){
         return luaL_error(L, "can not connect to %s:%d", host, port);
     }
-    return lservice_yield_for_session(L, ctx, session);
+    return lddcl_yield_for_session(L, ctx, session);
 }
 
 static int
 l_listen_socket (lua_State * L){
-    FIND_CTX;
+    LDDCL_FIND_CTX;
 
     const char * host = luaL_checkstring(L, 1);
     dduint16 port = (dduint16)luaL_checkinteger(L, 2);
@@ -76,7 +76,7 @@ l_listen_socket (lua_State * L){
 
 static int
 l_accept_socket (lua_State * L){
-    FIND_CTX;
+    LDDCL_FIND_CTX;
     ddcl_Socket fd = (ddcl_Socket)luaL_checkinteger(L, 1);
 
     ddcl_Session session;
@@ -84,12 +84,12 @@ l_accept_socket (lua_State * L){
     if(err){
         return luaL_error(L, ddcl_err(err));
     }
-    return lservice_yield_for_session(L, ctx, session);
+    return lddcl_yield_for_session(L, ctx, session);
 }
 
 static int
 l_read_socket (lua_State * L){
-    FIND_CTX;
+    LDDCL_FIND_CTX;
 
     ddcl_Socket fd = (ddcl_Socket)luaL_checkinteger(L, 1);
     size_t sz = luaL_checkinteger(L, 2);
@@ -99,7 +99,7 @@ l_read_socket (lua_State * L){
     if(err){
         return luaL_error(L, ddcl_err(err));
     }
-    return lservice_yield_for_session(L, ctx, session);
+    return lddcl_yield_for_session(L, ctx, session);
 }
 
 static int
@@ -132,7 +132,7 @@ l_getall_socket_count (lua_State * L){
 
 static int
 l_forward_socket (lua_State * L){
-    FIND_CTX;
+    LDDCL_FIND_CTX;
     ddcl_Socket fd = (ddcl_Socket)luaL_checkinteger(L, 1);
     int err = ddcl_forward_socket(fd, ctx->svr);
     if(err){

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "ddclconfig.h"
-#ifdef DDSYS_WIN
+#ifdef DD_WINDOWS
 #include <WinSock2.h>
 #include <ws2tcpip.h>
 #include <Windows.h>
@@ -22,21 +22,36 @@
 #endif
 
 
-#ifdef DDSYS_WIN
-    #ifndef DDSOCKETPOLL_USE_SELECT
-        #define DDSOCKETPOLL_USE_SELECT
-        //#define DDSOCKETPOLL_USE_IOCP
-    #endif
-#else
-    #ifndef DDSOCKETPOLL_USE_SELECT
-        #ifdef DDSYS_LINUX
-            #define DDSOCKETPOLL_USE_EPOLL
-        #endif
-        #ifdef DDSYS_APPLE
-            #define DDSOCKETPOLL_USE_KQUEUE
-        #endif
-    #endif
+#ifndef DDSOCKETPOLL_USE_SELECT
+
+#ifdef DD_WINDOWS
+#define DDSOCKETPOLL_USE_SELECT
+//#define DDSOCKETPOLL_USE_IOCP
 #endif
+
+#ifdef DD_LINUX
+#define DDSOCKETPOLL_USE_EPOLL
+#endif
+
+#ifdef DD_APPLE
+#ifdef DDSYS_MACOS
+    #define DDSOCKETPOLL_USE_KQUEUE
+#endif
+#ifdef DDSYS_IOS
+    #define DDSOCKETPOLL_USE_SELECT
+#endif
+#endif
+
+#ifdef DD_ANDROID
+#define DDSOCKETPOLL_USE_SELECT
+#endif
+
+#endif -- #ifndef DDSOCKETPOLL_USE_SELECT
+
+#ifndef DDSOCKETPOLL_USE_SELECT
+#define DDSOCKETPOLL_USE_SELECT
+#endif
+
 
 
 #ifdef DDSOCKETPOLL_USE_SELECT

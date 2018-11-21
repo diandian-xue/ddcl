@@ -1,7 +1,7 @@
 #define DDCLLUA_CORE
 
 #include "lcl.h"
-#include "lservice.h"
+#include "lddclservice.h"
 #include "ddclservice.h"
 #include "ddclmalloc.h"
 #include "ddcllog.h"
@@ -9,6 +9,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <memory.h>
+
+static lua_CFunction _hookf = NULL;
 
 static void
 _print_vaule (lua_State * L, char * msg){
@@ -20,14 +22,20 @@ _print_vaule (lua_State * L, char * msg){
     lua_pop(L, 1);
 }
 
-int
-lservice_yield_for_session(lua_State * L, Context * ctx, ddcl_Session session){
+DDCLLUA int
+lddcl_yield_for_session(lua_State * L, Context * ctx, ddcl_Session session){
     lua_rawgetp(L, LUA_REGISTRYINDEX, &ctx->session_map);
     lua_pushinteger(L, session);
     lua_pushthread(L);
     lua_rawset(L, -3);
     lua_pop(L, 1);
     return lua_yield(L, 0);
+}
+
+DDCLLUA int
+lddcl_set_newservice_hook(lua_CFunction f){
+    _hookf = f;
+    return 0;
 }
 
 static void
@@ -47,8 +55,10 @@ _callmsg_in_coroutine(ddcl_Msg * msg, void * fn_flag){
         lua_rawgetp(L, LUA_REGISTRYINDEX, fn_flag);
         if(lua_isnil(L, -1)){
             lua_pop(L, 1);
+            /*
             ddcl_log(ctx->svr,
-                    "error: msg call is not in service %p", fn_flag);
+                    "error: msg execute can not found callback function");
+            */
             return 0;
         }
     }
@@ -59,7 +69,7 @@ _callmsg_in_coroutine(ddcl_Msg * msg, void * fn_flag){
         if(lua_isnil(L, -1)){
             lua_pop(L, 2);
             ddcl_log(ctx->svr,
-                    "error:not founded function in session[%d]", msg->session);
+                    "error:not found function in session[%d]", msg->session);
             return 0;
         }
         lua_remove(L, -2);
@@ -233,12 +243,17 @@ l_new_service (lua_State * L){
     const char * script = luaL_checkstring(L, 1);
     const char * param = luaL_checkstring(L, 2);
 
-    FIND_CTX;
+    /*
+    LDDCL_FIND_CTX;
+    */
 
     Context * new_ctx = ddcl_malloc(sizeof(Context));
     memset(new_ctx, 0, sizeof(Context));
     new_ctx->is_worker = 1;
     lua_State * nL = luaL_newstate();
+    if(_hookf){
+        _hookf(nL);
+    }
     luaL_openlibs(nL);
     new_ctx->L = nL;
     lua_pushstring(nL, LDDCL_CTX_K);
@@ -266,7 +281,7 @@ l_new_service (lua_State * L){
     lua_pop(nL, 1);
 
     if(luaL_loadstring(nL, script) || !lua_pushstring(nL, param) || lua_pcall(nL, 1, 0, 0)){
-        ddcl_free(ctx);
+        ddcl_free(new_ctx);
         size_t errsz;
         const char * errstr = lua_tolstring(nL, -1, &errsz);
         luaL_traceback(L, nL, errstr, 0);
@@ -285,7 +300,7 @@ l_new_service (lua_State * L){
     lua_newtable(nL);
     lua_rawsetp(nL, LUA_REGISTRYINDEX, &new_ctx->co_map);
 
-    ddcl_send_b(svr, ctx->svr, DDCL_PTYPE_SEND, DDCL_CMD_LUA_START, 0, NULL, 0);
+    ddcl_send_b(svr, 0, DDCL_PTYPE_SEND, DDCL_CMD_LUA_START, 0, NULL, 0);
 
     lua_pushinteger(L, svr);
     return 1;
@@ -313,14 +328,14 @@ l_start (lua_State * L){
 
 static int
 l_self (lua_State * L){
-    FIND_CTX;
+    LDDCL_FIND_CTX;
     lua_pushinteger(L, ctx->svr);
     return 1;
 }
 
 static int
 l_exit (lua_State * L){
-    FIND_CTX;
+    LDDCL_FIND_CTX;
     ddcl_Service svr = ctx->svr;
     if(lua_gettop(L) > 0){
         svr = (ddcl_Service)luaL_checkinteger(L, 1);
@@ -336,7 +351,7 @@ static int
 l_callback (lua_State * L){
     luaL_checktype(L, 1, LUA_TFUNCTION);
 
-    FIND_CTX;
+    LDDCL_FIND_CTX;
     lua_rawgetp(L, LUA_REGISTRYINDEX, &ctx->startfn);
     if(lua_type(L, -1) != LUA_TFUNCTION){
         lua_pop(L, 1);
@@ -396,14 +411,19 @@ l_send (lua_State * L){
     size_t sz;
     const char * str = luaL_checklstring(L, 2, &sz);
 
+    ddcl_Service from = 0;
     lua_pushstring(L, LDDCL_CTX_K);
     lua_rawget(L, LUA_REGISTRYINDEX);
     if(lua_isnil(L, -1)){
-        return luaL_error(L, "lddcl.send mast run service coroutine");
+        //return luaL_error(L, "lddcl.send mast run service coroutine");
+        //ddcl_log(0, "lddcl.send not in service coroutine");
+    }
+    else {
+        Context * ctx = lua_touserdata(L, -1);
+        from = ctx->svr;
     }
 
-    Context * ctx = lua_touserdata(L, -1);
-    ddcl_send_b(to, ctx->svr,
+    ddcl_send_b(to, from,
             DDCL_PTYPE_SEND, DDCL_CMD_TEXT, 0, (void *)str, sz);
 
     lua_pop(L, 1);
@@ -416,7 +436,7 @@ l_call (lua_State * L){
     size_t sz;
     const char * str = luaL_checklstring(L, 2, &sz);
 
-    FIND_CTX;
+    LDDCL_FIND_CTX;
 
     ddcl_Session session;
     int ret = ddcl_call_b(to, ctx->svr, DDCL_PTYPE_SEND,
@@ -424,7 +444,7 @@ l_call (lua_State * L){
     if(ret){
         return luaL_error(L, ddcl_err(ret));
     }
-    return lservice_yield_for_session(L, ctx, session);
+    return lddcl_yield_for_session(L, ctx, session);
 }
 
 static int
@@ -432,7 +452,7 @@ l_resp (lua_State * L){
     size_t sz;
     const char * str = luaL_checklstring(L, 1, &sz);
 
-    FIND_CTX;
+    LDDCL_FIND_CTX;
 
     lua_rawgetp(L, LUA_REGISTRYINDEX, &ctx->co_map);
     lua_rawgetp(L, -1, L);
@@ -466,7 +486,7 @@ l_timeout(lua_State * L){
     dduint32 ms = (dduint32)luaL_checkinteger(L, 1);
     luaL_checktype(L, 2, LUA_TFUNCTION);
 
-    FIND_CTX;
+    LDDCL_FIND_CTX;
 
     ddcl_Session session;
     ddcl_timeout(ctx->svr, &session, ms);
@@ -482,7 +502,19 @@ l_timeout(lua_State * L){
 
 static int
 l_log (lua_State * L){
-    FIND_CTX;
+    ddcl_Service from = 0;
+    lua_pushstring(L, LDDCL_CTX_K);
+    lua_rawget(L, LUA_REGISTRYINDEX);
+    if(lua_isnil(L, -1)){
+        //return luaL_error(L, "lddcl.send mast run service coroutine");
+        //ddcl_log(0, "lddcl.send not in service coroutine");
+    }
+    else {
+        Context * ctx = lua_touserdata(L, -1);
+        from = ctx->svr;
+    }
+    lua_pop(L, 1);
+
     int top = lua_gettop(L);
     if(!top){
         return 0;
@@ -501,14 +533,14 @@ l_log (lua_State * L){
     lua_pushstring(L, "  ");
     lua_call(L, 2, 1);
     const char * str = lua_tostring(L, -1);
-    ddcl_log(ctx->svr, str);
+    ddcl_log(from, str);
     lua_pop(L, 3);
     return 0;
 }
 
 static int
 l_fork (lua_State * L){
-    FIND_CTX;
+    LDDCL_FIND_CTX;
     luaL_checktype(L, 1, LUA_TFUNCTION);
 
     ddcl_Session session;
@@ -525,7 +557,7 @@ l_fork (lua_State * L){
 
 static int
 l_co_sleep (lua_State * L){
-    FIND_CTX;
+    LDDCL_FIND_CTX;
 
     dduint32 ms = (dduint32)luaL_checkinteger(L, 1);
 

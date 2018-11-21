@@ -5,14 +5,14 @@
 #include <time.h>
 #include <stdio.h>
 
-#ifdef DDSYS_WIN
+#ifdef DD_WINDOWS
 #else
 #include <sys/time.h>
 #endif
 
 DDCLAPI int
 ddcl_new_thread (ddcl_Thread * t, void *(*start_fn)(void *), void * arg, int detach){
-#ifdef DDSYS_WIN
+#ifdef DD_WINDOWS
     SECURITY_ATTRIBUTES psa;
     psa.nLength = sizeof(sizeof(psa));
     psa.bInheritHandle = detach;
@@ -29,7 +29,7 @@ ddcl_new_thread (ddcl_Thread * t, void *(*start_fn)(void *), void * arg, int det
 
 DDCLAPI void
 ddcl_exit_thread (){
-#ifdef DDSYS_WIN
+#ifdef DD_WINDOWS
     ExitThread(0);
 #else
     pthread_exit(NULL);
@@ -38,7 +38,7 @@ ddcl_exit_thread (){
 
 DDCLAPI int
 ddcl_cancel_thread (ddcl_Thread t) {
-#ifdef DDSYS_WIN
+#ifdef DD_WINDOWS
     HANDLE h = OpenThread(THREAD_ALL_ACCESS, FALSE, t);
     BOOL r =  TerminateThread(h, 0);
     CloseHandle(h);
@@ -50,7 +50,7 @@ ddcl_cancel_thread (ddcl_Thread t) {
 
 DDCLAPI int
 ddcl_join_thread (ddcl_Thread t) {
-#ifdef DDSYS_WIN
+#ifdef DD_WINDOWS
     HANDLE h = OpenThread(THREAD_ALL_ACCESS, FALSE, t);
     DWORD r = WaitForSingleObject(h, INFINITE);
     CloseHandle(h);
@@ -62,7 +62,7 @@ ddcl_join_thread (ddcl_Thread t) {
 
 DDCLAPI ddcl_Thread
 ddcl_self_thread (){
-#ifdef DDSYS_WIN
+#ifdef DD_WINDOWS
     return GetCurrentThreadId();
 #else
     return pthread_self();
@@ -71,7 +71,7 @@ ddcl_self_thread (){
 
 DDCLAPI void
 ddcl_sleepms (dduint32 ms){
-#ifdef DDSYS_WIN
+#ifdef DD_WINDOWS
     Sleep(ms);
 #else
     usleep(ms * 1000);
@@ -82,7 +82,7 @@ ddcl_sleepms (dduint32 ms){
 
 DDCLAPI void
 ddcl_init_spin(ddcl_SpinLock * l) {
-#ifdef DDSYS_WIN
+#ifdef DD_WINDOWS
     l->lock = FALSE;
 #else
     pthread_spin_init(&l->lock);
@@ -92,7 +92,7 @@ ddcl_init_spin(ddcl_SpinLock * l) {
 
 DDCLAPI int
 ddcl_lock_spin(ddcl_SpinLock * l) {
-#ifdef DDSYS_WIN
+#ifdef DD_WINDOWS
     while (InterlockedExchange(&l->lock, TRUE) == TRUE)
         continue;
     return 0;
@@ -103,7 +103,7 @@ ddcl_lock_spin(ddcl_SpinLock * l) {
 
 DDCLAPI int
 ddcl_try_lock_spin(ddcl_SpinLock * l) {
-#ifdef DDSYS_WIN
+#ifdef DD_WINDOWS
     return InterlockedExchange(&l->lock, TRUE) != TRUE;
 #else
     return pthread_spin_trylock(&l->lock);
@@ -112,7 +112,7 @@ ddcl_try_lock_spin(ddcl_SpinLock * l) {
 
 DDCLAPI int
 ddcl_unlock_spin(ddcl_SpinLock * l) {
-#ifdef DDSYS_WIN
+#ifdef DD_WINDOWS
     InterlockedExchange(&l->lock, FALSE);
     return 0;
 #else
@@ -122,7 +122,7 @@ ddcl_unlock_spin(ddcl_SpinLock * l) {
 
 DDCLAPI void
 ddcl_destroy_spin(ddcl_SpinLock * l) {
-#ifdef DDSYS_WIN
+#ifdef DD_WINDOWS
     InterlockedExchange(&l->lock, FALSE);
 #else
     pthread_spin_destroy(&l->lock);
@@ -132,7 +132,7 @@ ddcl_destroy_spin(ddcl_SpinLock * l) {
 
 DDCLAPI void
 ddcl_init_mutex(ddcl_Mutex * l) {
-#ifdef DDSYS_WIN
+#ifdef DD_WINDOWS
     InitializeCriticalSection(&l->lock);
 #else
     pthread_mutex_init(&l->lock, NULL);
@@ -141,7 +141,7 @@ ddcl_init_mutex(ddcl_Mutex * l) {
 
 DDCLAPI int
 ddcl_lock_mutex(ddcl_Mutex * l) {
-#ifdef DDSYS_WIN
+#ifdef DD_WINDOWS
     EnterCriticalSection(&l->lock);
     return 0;
 #else
@@ -151,7 +151,7 @@ ddcl_lock_mutex(ddcl_Mutex * l) {
 
 DDCLAPI int
 ddcl_unlock_mutex(ddcl_Mutex * l) {
-#ifdef DDSYS_WIN
+#ifdef DD_WINDOWS
     LeaveCriticalSection(&l->lock);
     return 0;
 #else
@@ -162,7 +162,7 @@ ddcl_unlock_mutex(ddcl_Mutex * l) {
 
 DDCLAPI void
 ddcl_destroy_mutex(ddcl_Mutex * l) {
-#ifdef DDSYS_WIN
+#ifdef DD_WINDOWS
     DeleteCriticalSection(&l->lock);
 #else
     pthread_mutex_destroy(&l->lock);
@@ -172,7 +172,7 @@ ddcl_destroy_mutex(ddcl_Mutex * l) {
 
 DDCLAPI void
 ddcl_init_cond (ddcl_Cond * cond) {
-#ifdef DDSYS_WIN
+#ifdef DD_WINDOWS
     cond->evt = CreateSemaphore(NULL, 0, 1, NULL);
     //cond->evt = CreateEvent(NULL, FALSE, FALSE, "ddcl_Cond");
     //cond->lock = FALSE;
@@ -184,7 +184,7 @@ ddcl_init_cond (ddcl_Cond * cond) {
 
 DDCLAPI void
 ddcl_destroy_cond(ddcl_Cond * cond) {
-#ifdef DDSYS_WIN
+#ifdef DD_WINDOWS
     CloseHandle(cond->evt);
 #else
     pthread_mutex_destroy(&(cond->mutex));
@@ -194,7 +194,7 @@ ddcl_destroy_cond(ddcl_Cond * cond) {
 
 DDCLAPI int
 ddcl_wait_cond (ddcl_Cond * cond) {
-#ifdef DDSYS_WIN
+#ifdef DD_WINDOWS
     /*
     while (InterlockedExchange(&cond->lock, TRUE) == TRUE) {
         ddcl_sleepms(1);
@@ -213,7 +213,7 @@ ddcl_wait_cond (ddcl_Cond * cond) {
 
 DDCLAPI int
 ddcl_wait_time_cond (ddcl_Cond * cond, dduint32 ms) {
-#ifdef DDSYS_WIN
+#ifdef DD_WINDOWS
     /*
     long long start = ddcl_now();
     long long now;
@@ -241,7 +241,7 @@ ddcl_wait_time_cond (ddcl_Cond * cond, dduint32 ms) {
 
 DDCLAPI int
 ddcl_signal_cond(ddcl_Cond * cond) {
-#ifdef DDSYS_WIN
+#ifdef DD_WINDOWS
     /*
     InterlockedExchange(&(cond->lock), FALSE);
     return 0;
@@ -259,7 +259,7 @@ ddcl_signal_cond(ddcl_Cond * cond) {
 
 DDCLAPI void
 ddcl_init_rw (ddcl_RWLock * l){
-#ifdef DDSYS_WIN
+#ifdef DD_WINDOWS
     InitializeSRWLock(&(l->lock));
     //InitializeCriticalSection(&l->lock);
 #else
@@ -269,7 +269,7 @@ ddcl_init_rw (ddcl_RWLock * l){
 
 DDCLAPI void
 ddcl_destroy_rw(ddcl_RWLock * l){
-#ifdef DDSYS_WIN
+#ifdef DD_WINDOWS
     //DeleteCriticalSection(&(l->lock));
 #else
     pthread_rwlock_destroy(&(l->lock));
@@ -279,7 +279,7 @@ ddcl_destroy_rw(ddcl_RWLock * l){
 
 DDCLAPI void
 ddcl_rlock_rw (ddcl_RWLock * l){
-#ifdef DDSYS_WIN
+#ifdef DD_WINDOWS
     AcquireSRWLockExclusive(&(l->lock));
     //EnterCriticalSection(&l->lock);
 #else
@@ -289,7 +289,7 @@ ddcl_rlock_rw (ddcl_RWLock * l){
 
 DDCLAPI void
 ddcl_wlock_rw (ddcl_RWLock * l){
-#ifdef DDSYS_WIN
+#ifdef DD_WINDOWS
     AcquireSRWLockShared(&(l->lock));
     //EnterCriticalSection(&l->lock);
 #else
@@ -300,7 +300,7 @@ ddcl_wlock_rw (ddcl_RWLock * l){
 DDCLAPI void
 ddcl_runlock_rw(ddcl_RWLock * l) {
 
-#ifdef DDSYS_WIN
+#ifdef DD_WINDOWS
     ReleaseSRWLockExclusive(&(l->lock));
     //LeaveCriticalSection(&l->lock);
 #else
@@ -310,7 +310,7 @@ ddcl_runlock_rw(ddcl_RWLock * l) {
 
 DDCLAPI void
 ddcl_wunlock_rw (ddcl_RWLock * l){
-#ifdef DDSYS_WIN
+#ifdef DD_WINDOWS
     ReleaseSRWLockShared(&(l->lock));
     //LeaveCriticalSection(&l->lock);
 #else

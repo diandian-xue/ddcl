@@ -4,7 +4,7 @@
 #include "ddcl.h"
 #include <sys/stat.h>
 
-#ifdef DDSYS_WIN
+#ifdef DD_WINDOWS
 #include <direct.h>
 #include <Windows.h>
 
@@ -32,7 +32,7 @@
 #endif
 
 
-#if defined(DDSYS_LINUX)
+#if defined(DD_LINUX)
 #include <unistd.h>
 #define DDCL_IFMT __S_IFMT
 #define DDCL_IFDIR __S_IFDIR
@@ -44,7 +44,7 @@
 #define DDCL_IEXEC  __S_IEXEC
 #endif
 
-#if defined(DDSYS_APPLE) || defined(DDSYS_ANDROID)
+#if defined(DD_APPLE) || defined(DD_ANDROID)
 #define DDCL_IFMT S_IFMT
 #define DDCL_IFDIR S_IFDIR
 #define DDCL_IFCHR S_IFCHR

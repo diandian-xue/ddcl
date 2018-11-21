@@ -2,7 +2,7 @@
 
 #include "ddplatform.h"
 
-#ifdef DDSYS_WIN
+#ifdef DD_WINDOWS
     #ifndef WIN32_LEAN_AND_MEAN
        #define WIN32_LEAN_AND_MEAN
     #endif

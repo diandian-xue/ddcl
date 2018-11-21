@@ -4,7 +4,7 @@
 #include "ddclthread.h"
 #include "ddclmalloc.h"
 
-#ifdef DDSYS_WIN
+#ifdef DD_WINDOWS
 #include <Windows.h>
 #else
 #include <sys/time.h>
@@ -16,7 +16,7 @@
 #include <memory.h>
 
 static struct {
-#ifdef DDSYS_WIN
+#ifdef DD_WINDOWS
     ddcl_SpinLock lock;
     LARGE_INTEGER counter;
     LARGE_INTEGER frequency;
@@ -185,7 +185,7 @@ DDCLAPI int
 ddcl_init_timer_module (ddcl * conf){
     _MS = conf->timer_ms;
     memset(&_T, 0, sizeof(_T));
-#ifdef DDSYS_WIN
+#ifdef DD_WINDOWS
     ddcl_init_spin(&_T.lock);
     QueryPerformanceCounter(&_T.counter);
     QueryPerformanceFrequency(&_T.frequency);
@@ -237,7 +237,7 @@ ddcl_exit_timer_module (){
 DDCLAPI dduint64
 ddcl_now (){
 
-#ifdef DDSYS_WIN
+#ifdef DD_WINDOWS
     ddcl_lock_spin(&_T.lock);
     LARGE_INTEGER li;
     QueryPerformanceCounter(&li);
@@ -253,7 +253,7 @@ ddcl_now (){
 
 DDCLAPI dduint64
 ddcl_systime(){
-#ifdef DDSYS_WIN
+#ifdef DD_WINDOWS
     time_t t = time(NULL);
     SYSTEMTIME st;
     GetSystemTime(&st);

@@ -31,20 +31,3 @@ if(APPLE)
     endif()
 endif()
 
-
-add_executable(lddcl_execute
-    ${SRC_PATH}/main/lmain.c
-    )
-
-target_link_libraries(lddcl_execute PUBLIC ddcl)
-target_link_libraries(lddcl_execute PUBLIC lualib)
-target_link_libraries(lddcl_execute PUBLIC lddcl)
-target_link_libraries(lddcl_execute PUBLIC lua-cjson)
-set_target_properties(lddcl_execute PROPERTIES OUTPUT_NAME lddcl)
-
-if(WIN32)
-else()
-    set_target_properties(lddcl_execute
-        PROPERTIES COMPILE_FLAGS ${DDCLLUA_COMPILE_FLAGS})
-endif()
-

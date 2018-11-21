@@ -1,42 +1,59 @@
 ﻿#pragma once
 
-#if defined(WIN32)
-#define DDSYS_WIN
+#if defined(WIN32) || defined(_WINDOWS)
 /*
+#define DD_WINDOWS
 #define DDSYS_WIN_PC
 #define DDSYS_WIN_RT
 #define DDSYS_WIN_PHONE
 */
+#define DDSYS_WIN
+#define DD_WINDOWS
+
+#ifdef WIN_RT
+#define DDSYS_WIN_RT
+#endif
+
+#ifdef WIN_PHONE
+#define DDSYS_WIN_PHONE
+#endif
+
+#if !defined(DDSYS_WIN_RT) && !defined(DDSYS_WIN_PHONE)
+#define DDSYS_WINPC
+#endif
+
 #endif
 
 #if defined(LINUX) || defined(linux)
-#define DDSYS_LINUX
-/*
-#define DDSYS_LINUX_CENTOS
-#define DDSYS_LINUX_UBUNTU
-#define DDSYS_LINUX_CYGWIN
-#define DDSYS_LINUX_MINGW
-*/
+#define DD_LINUX
+#define DD_UNIX
 #endif
 
 #if defined(ANDROID)
-#undef DDSYS_LINUX
-#define DDSYS_ANDROID
+#define DD_ANDROID
+#define DD_UNIX
 #endif
 
 #if defined(__APPLE__) || defined(APPLE)
-#define DDSYS_APPLE
+#define DD_UNIX
+#define DD_APPLE
 /*
-#define DDSYS_APPLE_MAC
-#define DDSYS_APPLE_IOS
+#define DDSYS_MACOS
+#define DDSYS_IOS
 */
+#ifdef APPLE_IOS
+#define DDSYS_IOS
+#endif
+
+#ifndef DDSYS_IOS
+#define DDSYS_MACOS
+#endif
+
 #endif
 
 
-#if !defined(DDSYS_WIN) &&\
-    !defined(DDSYS_LINUX) &&\
-    !defined(DDSYS_ANDROID) &&\
-    !defined(DDSYS_APPLE)
+#if !defined(DD_WINDOWS) &&\
+    !defined(DD_UNIX)
 #error "unknown system"
 #endif
 

@@ -2,7 +2,7 @@
 
 #include "ddclconfig.h"
 
-#ifdef DDSYS_WIN
+#ifdef DD_WINDOWS
 #include <Windows.h>
 #else
 	#define _XOPEN_SOURCE 500
@@ -21,7 +21,7 @@
 
 
 // 线程句柄
-#ifdef DDSYS_WIN
+#ifdef DD_WINDOWS
 typedef DWORD ddcl_Thread;
 #else
 typedef pthread_t ddcl_Thread;
@@ -29,7 +29,7 @@ typedef pthread_t ddcl_Thread;
 
 // 自旋锁
 typedef struct tag_ddcl_SpinLock {
-#ifdef DDSYS_WIN
+#ifdef DD_WINDOWS
     BOOL lock;
 #else
     pthread_spinlock_t  lock;
@@ -38,7 +38,7 @@ typedef struct tag_ddcl_SpinLock {
 
 // 可重用互斥锁
 typedef struct tag_ddcl_Mutex {
-#ifdef DDSYS_WIN
+#ifdef DD_WINDOWS
     CRITICAL_SECTION lock;
 #else
     pthread_mutex_t lock;
@@ -47,7 +47,7 @@ typedef struct tag_ddcl_Mutex {
 
 // 信号量
 typedef struct tag_ddcl_Cond {
-#ifdef DDSYS_WIN
+#ifdef DD_WINDOWS
     HWND evt;
     BOOL lock;
 #else
@@ -58,7 +58,7 @@ typedef struct tag_ddcl_Cond {
 
 //读写锁
 typedef struct tag_ddcl_RWLock {
-#ifdef DDSYS_WIN
+#ifdef DD_WINDOWS
     SRWLOCK lock;
     //CRITICAL_SECTION lock;
 #else

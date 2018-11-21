@@ -6,9 +6,7 @@
 #include "ddclerr.h"
 #include "ddcllog.h"
 
-#ifdef DDSYS_WIN
-
-#else
+#ifndef DD_WINDOWS
     #include <sys/socket.h>
     #include <netinet/in.h>
     #include <netdb.h>

@@ -230,6 +230,13 @@ l_exit_service_cb(ddcl_Service h, void * ud){
 
         lua_pop(L, 1);
      }
+    lua_pushnil(L);
+    lua_rawsetp(L, LUA_REGISTRYINDEX, &ctx->co_map);
+    lua_pushnil(L);
+    lua_rawsetp(L, LUA_REGISTRYINDEX, &ctx->session_map);
+    lua_pushstring(L, LDDCL_CTX_K);
+    lua_pushnil(L);
+    lua_rawset(L, LUA_REGISTRYINDEX);
 
     lua_settop(L, 0);
     if (!ctx->be_main) {

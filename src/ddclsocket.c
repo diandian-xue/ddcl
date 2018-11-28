@@ -382,6 +382,8 @@ _del_fd (Socket * s){
 
     if(s->forward){
         _rsp_socket(s->st, s, s->source, 0, DDCL_SOCKET_ERROR);
+    }else if(s->status == _SS_CONNECTING){
+        _rsp_socket(s->st, s, s->source, s->session, DDCL_SOCKET_ERROR);
     }
 
     ddcl_wlock_rw(&(_H.lock));
@@ -712,7 +714,7 @@ _excute_read_cmd(SocketCmd * cmd, ddcl_Service source, ddcl_Session session){
         return;
     }
     if(s->forward){
-        const char * err = "socket fd is forward mode";
+        const char * err = "the fd was <forward mode>";
         ddcl_send_b(source, 0, DDCL_PTYPE_RESP,
             DDCL_CMD_ERROR, session, err, strlen(err) + 1);
         return;
@@ -811,7 +813,7 @@ _excute_accept_cmd(SocketCmd * cmd, ddcl_Service source, ddcl_Session session){
         return;
     }
     if(s->forward){
-        const char * err = "socket fd is forward mode";
+        const char * err = "the fd was <forward mode>";
         ddcl_send_b(source, 0, DDCL_PTYPE_RESP,
             DDCL_CMD_ERROR, session, err, strlen(err) + 1);
         return;

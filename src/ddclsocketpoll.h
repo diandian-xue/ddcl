@@ -22,35 +22,36 @@
 #endif
 
 
-#ifndef DDSOCKETPOLL_USE_SELECT
+#undef DDSOCKETPOLL_USE_EPOLL
+#undef DDSOCKETPOLL_USE_IOCP
+#undef DDSOCKETPOLL_USE_KQUEUE
 
-#ifdef DD_WINDOWS
-#define DDSOCKETPOLL_USE_SELECT
-//#define DDSOCKETPOLL_USE_IOCP
-#endif
+#ifdef DDSOCKETPOLL_USE_SELECT
+#else
 
-#ifdef DD_LINUX
-#define DDSOCKETPOLL_USE_EPOLL
-#endif
+    #ifdef DD_WINDOWS
+        #define DDSOCKETPOLL_USE_SELECT
+        //#define DDSOCKETPOLL_USE_IOCP
+    #endif
 
-#ifdef DD_APPLE
-#ifdef DDSYS_MACOS
-    #define DDSOCKETPOLL_USE_KQUEUE
-#endif
-#ifdef DDSYS_IOS
-    #define DDSOCKETPOLL_USE_SELECT
-#endif
-#endif
+    #ifdef DD_LINUX
+        #define DDSOCKETPOLL_USE_EPOLL
+    #endif
 
-#ifdef DD_ANDROID
-#define DDSOCKETPOLL_USE_SELECT
-#endif
+    #ifdef DD_APPLE
+        #ifdef DDSYS_MACOS
+            #define DDSOCKETPOLL_USE_KQUEUE
+        #endif
+        #ifdef DDSYS_IOS
+            #define DDSOCKETPOLL_USE_SELECT
+        #endif
+    #endif
+
+    #ifdef DD_ANDROID
+        #define DDSOCKETPOLL_USE_SELECT
+    #endif
 
 #endif -- #ifndef DDSOCKETPOLL_USE_SELECT
-
-#ifndef DDSOCKETPOLL_USE_SELECT
-#define DDSOCKETPOLL_USE_SELECT
-#endif
 
 
 

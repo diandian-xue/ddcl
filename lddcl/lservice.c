@@ -47,6 +47,49 @@ _new_session_table(lua_State * L, ddcl_Service from, ddcl_Session session){
     lua_rawseti(L, -2, 2);
 }
 
+static void
+_resume_coroutine (Context * ctx, lua_State *L, lua_State * from, int top){
+    int ret = lua_resume(L, NULL, top);
+    int has_err = 0;
+    int has_complete = 0;
+    switch(ret){
+        case LUA_OK:
+            has_complete = 1;
+            break;
+        case LUA_YIELD:
+            break;
+        default:
+            has_complete = 1;
+            has_err = 1;
+            break;
+    }
+    if(has_err){
+        const char * errstr = lua_tostring(L, -1);
+        luaL_traceback(L, from ? from : L, errstr, 0);
+        size_t errsz;
+        errstr = lua_tolstring(L, -1, &errsz);
+
+        lua_rawgetp(L, LUA_REGISTRYINDEX, &(ctx->co_map));
+        lua_rawgetp(L, -1, L);
+        if (!lua_isnil(L, -1)){
+            lua_rawgeti(L, -1, 1);
+            ddcl_Service from = (ddcl_Service)lua_tointeger(L, -1);
+            lua_rawgeti(L, -2, 2);
+            ddcl_Session session = (ddcl_Session)lua_tointeger(L, -1);
+            ddcl_send_b(from, 0, DDCL_PTYPE_RESP,
+                DDCL_CMD_ERROR, session, errstr, errsz + 1);
+        }else{
+            ddcl_log(ctx->svr, "call field:\n%s", errstr);
+        }
+    }
+
+    if(has_complete){
+        lua_rawgetp(L, LUA_REGISTRYINDEX, &(ctx->co_map));
+        lua_pushnil(L);
+        lua_rawsetp(L, -2, L);
+    }
+}
+
 static int
 _callmsg_in_coroutine(ddcl_Msg * msg, void * fn_flag){
     Context * ctx = (Context *)msg->ud;
@@ -55,10 +98,6 @@ _callmsg_in_coroutine(ddcl_Msg * msg, void * fn_flag){
         lua_rawgetp(L, LUA_REGISTRYINDEX, fn_flag);
         if(lua_isnil(L, -1)){
             lua_pop(L, 1);
-            /*
-            ddcl_log(ctx->svr,
-                    "error: msg execute can not found callback function");
-            */
             return 0;
         }
     }
@@ -90,44 +129,18 @@ _callmsg_in_coroutine(ddcl_Msg * msg, void * fn_flag){
     lua_pushinteger(L, msg->self);
     lua_pushinteger(L, msg->from);
 
-    int ret = lua_resume(L, NULL, 7);
-    switch(ret){
-        case LUA_OK:
-            break;
-        case LUA_YIELD:
-            /*
-            if(msg->session && false){
-                lua_rawgetp(L, LUA_REGISTRYINDEX, &ctx->session_map);
-                lua_pushinteger(L, msg->session);
-                lua_pushvalue(L, -2);
-                lua_settable(L, -3);
-                lua_pop(L, 1);
-            }
-            lua_pop(L, 1);
-             */
-            break;
-        default:{
-            size_t errsz;
-            const char * errstr = lua_tolstring(L, -1, &errsz);
-            luaL_traceback(L, L, errstr, 0);
-            const char * tb_errstr = lua_tostring(L, -1);
-            ddcl_log(ctx->svr, tb_errstr);
-            if (msg->from && msg->session){
-                ddcl_send_b(msg->from, 0, DDCL_PTYPE_RESP,
-                    DDCL_CMD_ERROR, msg->session, NULL, 0);
-            }
-            break;
-        }
-    }
+    _resume_coroutine(ctx, L, NULL, 7);
+    lua_settop(L, 0);
     return 0;
 }
 
 static int
 _excute_send_msg(ddcl_Msg * msg){
     Context * ctx = (Context *)msg->ud;
-    if(msg->cmd == DDCL_CMD_LUA_START){
+    switch(msg->cmd){
+    case DDCL_CMD_START:
         return _callmsg_in_coroutine(msg, &ctx->startfn);
-    }else{
+    default:
         return _callmsg_in_coroutine(msg, &ctx->callback);
     }
 }
@@ -144,6 +157,11 @@ _excute_resp_msg(ddcl_Msg * msg){
     lua_rawgetp(L, LUA_REGISTRYINDEX, &ctx->session_map);
     lua_pushinteger(L, msg->session);
     lua_rawget(L, -2);
+
+    if (msg->cmd == DDCL_CMD_TIMEOUT) {
+        printf("%d\n", msg->cmd);
+
+    }
 
     switch(lua_type(L, -1)){
         case LUA_TFUNCTION:
@@ -162,31 +180,15 @@ _excute_resp_msg(ddcl_Msg * msg){
         lua_pushnil(L);
         lua_rawset(L, -3);
         luaL_traceback(L, nL, msg->data, 0);
-        ddcl_log(ctx->svr, "call faild: %s", lua_tostring(L, -1));
+        ddcl_log(ctx->svr, "call faild:\n%s", lua_tostring(L, -1));
         return 0;
     }
     lua_settop(nL, 0);
     lua_pushlightuserdata(nL, (void *)msg->data);
     lua_pushinteger(nL, msg->sz);
-    int ret = lua_resume(nL, NULL, 2);
-    switch(ret){
-        case LUA_OK:
-            lua_rawgetp(L, LUA_REGISTRYINDEX, &ctx->session_map);
-            lua_pushinteger(L, msg->session);
-            lua_pushnil(L);
-            lua_rawset(L, -3);
-            lua_pop(L, 1);
-            break;
-        case LUA_YIELD:
-            break;
-        default:
-            ddcl_log(ctx->svr, "%s  %d", lua_tostring(nL, -1), lua_gettop(nL));
-            lua_rawgetp(L, LUA_REGISTRYINDEX, &ctx->session_map);
-            lua_pushinteger(L, msg->session);
-            lua_pushnil(L);
-            lua_rawset(L, -3);
-            break;
-    }
+    _resume_coroutine(ctx, nL, L, 2);
+    lua_settop(nL, 0);
+    lua_settop(L, 0);
     return 0;
 }
 
@@ -294,7 +296,7 @@ l_new_service (lua_State * L){
         luaL_traceback(L, nL, errstr, 0);
         const char * tb_errstr = lua_tostring(L, -1);
         lua_close(nL);
-        return luaL_error(L, "load lua error:%s", tb_errstr);
+        return luaL_error(L, "load lua error:\n%s", tb_errstr);
     }
 
     ddcl_Service svr = ddcl_new_service(l_msg_cbfn, new_ctx);
@@ -307,7 +309,7 @@ l_new_service (lua_State * L){
     lua_newtable(nL);
     lua_rawsetp(nL, LUA_REGISTRYINDEX, &new_ctx->co_map);
 
-    ddcl_send_b(svr, 0, DDCL_PTYPE_SEND, DDCL_CMD_LUA_START, 0, NULL, 0);
+    ddcl_send_b(svr, 0, DDCL_PTYPE_SEND, DDCL_CMD_START, 0, NULL, 0);
 
     lua_pushinteger(L, svr);
     return 1;
@@ -406,7 +408,7 @@ l_start_non_worker(lua_State * L){
     lua_newtable(L);
     lua_rawsetp(L, LUA_REGISTRYINDEX, &ctx->co_map);
 
-    ddcl_send_b(svr, 0, DDCL_PTYPE_SEND, DDCL_CMD_LUA_START, 0, NULL, 0);
+    ddcl_send_b(svr, 0, DDCL_PTYPE_SEND, DDCL_CMD_START, 0, NULL, 0);
     ddcl_start(svr);
 
     return 0;
@@ -421,11 +423,7 @@ l_send (lua_State * L){
     ddcl_Service from = 0;
     lua_pushstring(L, LDDCL_CTX_K);
     lua_rawget(L, LUA_REGISTRYINDEX);
-    if(lua_isnil(L, -1)){
-        //return luaL_error(L, "lddcl.send mast run service coroutine");
-        //ddcl_log(0, "lddcl.send not in service coroutine");
-    }
-    else {
+    if(!lua_isnil(L, -1)){
         Context * ctx = lua_touserdata(L, -1);
         from = ctx->svr;
     }
@@ -472,19 +470,13 @@ l_resp (lua_State * L){
     ddcl_Service from = (ddcl_Service)lua_tointeger(L, -1);
     lua_rawgeti(L, -2, 2);
     ddcl_Session session = lua_tointeger(L, -1);
-    lua_pop(L, 3);
-
-    lua_pushnil(L);
-    lua_rawsetp(L, -2, L);
-    lua_pop(L, 1);
+    lua_pop(L, 4);
 
     int err = ddcl_send_b(from, ctx->svr,
                 DDCL_PTYPE_RESP, DDCL_CMD_TEXT, session, (void *)str, sz);
     if(err){
-        lua_pop(L, 1);
         return luaL_error(L, "resp error:%s \n%s", ddcl_err(err));
     }
-    lua_pop(L, 1);
     return 0;
 }
 
@@ -512,11 +504,7 @@ l_log (lua_State * L){
     ddcl_Service from = 0;
     lua_pushstring(L, LDDCL_CTX_K);
     lua_rawget(L, LUA_REGISTRYINDEX);
-    if(lua_isnil(L, -1)){
-        //return luaL_error(L, "lddcl.send mast run service coroutine");
-        //ddcl_log(0, "lddcl.send not in service coroutine");
-    }
-    else {
+    if(!lua_isnil(L, -1)){
         Context * ctx = lua_touserdata(L, -1);
         from = ctx->svr;
     }
@@ -588,25 +576,20 @@ l_co_running (lua_State * L){
 
 static int
 l_co_resume (lua_State * L){
+    LDDCL_FIND_CTX;
+
     luaL_checktype(L, 1, LUA_TTHREAD);
     lua_State * coL = lua_tothread(L, 1);
 
+    //lua_newtable(L);
     int top = lua_gettop(L) - 1;
-    lua_settop(coL, 0);
     for (int i = 2; i <= (top + 1); i ++){
         lua_pushvalue(L, i);
+        //lua_rawseti(L, -2, i - 1);
     }
     lua_xmove(L, coL, top);
-    int ret = lua_resume(coL, NULL, top);
-    switch(ret){
-        case LUA_OK:
-            break;
-        case LUA_YIELD:
-            break;
-        default:
-            return luaL_error(L, lua_tostring(coL, -1));
-            break;
-    }
+    _resume_coroutine(ctx, coL, L, top);
+
     return 0;
 }
 
@@ -627,7 +610,7 @@ openlib_service (lua_State * L){
     DDLUA_PUSHENUM(L, "DDCL_CMD_ERROR",         DDCL_CMD_ERROR);
     DDLUA_PUSHENUM(L, "DDCL_CMD_SOCKET",        DDCL_CMD_SOCKET);
     DDLUA_PUSHENUM(L, "DDCL_CMD_LOG",           DDCL_CMD_LOG);
-    DDLUA_PUSHENUM(L, "DDCL_CMD_LUA_START",     DDCL_CMD_LUA_START);
+    DDLUA_PUSHENUM(L, "DDCL_CMD_START",         DDCL_CMD_START);
     DDLUA_PUSHENUM(L, "DDCL_CMD_END",           DDCL_CMD_END);
 
 

@@ -16,14 +16,19 @@ static ddcl_Handle _log_svr;
 
 static void
 default_log_service_cb(ddcl_Msg * msg){
-    printf("[:%08x] ", msg->from);
-    printf("%s\n", (const char *)msg->data);
-    fflush(stdout);
+    if(msg->cmd == DDCL_CMD_LOG){
+        printf("[:%08x] ", msg->from);
+        printf("%s\n", (const char *)msg->data);
+    }else if(msg->cmd == DDCL_CMD_TIMEOUT){
+        ddcl_timeout(msg->self, NULL, 100);
+        fflush(stdout);
+    }
 }
 
 DDCLAPI int
 ddcl_init_log_module(ddcl * conf){
     _log_svr = ddcl_new_service(default_log_service_cb, NULL);
+    ddcl_timeout(_log_svr, NULL, 100);
     return 0;
 }
 

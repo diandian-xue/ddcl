@@ -14,7 +14,7 @@ enum {
     DDCL_CMD_ERROR,
     DDCL_CMD_SOCKET,
     DDCL_CMD_LOG,
-    DDCL_CMD_LUA_START,
+    DDCL_CMD_START,
 
     DDCL_CMD_END,
 };

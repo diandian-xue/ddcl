@@ -5,7 +5,8 @@
 #include "ddclservice.h"
 
 enum{
-    DDCL_SOCKET_ACCEPT = 0,
+	DDCL_SOCKET_CONNECT = 0,
+    DDCL_SOCKET_ACCEPT,
     DDCL_SOCKET_READ,
     DDCL_SOCKET_ERROR,
 };

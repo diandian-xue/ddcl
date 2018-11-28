@@ -17,9 +17,9 @@ ddcl_init (ddcl * conf){
     CKRETURN(ddcl_init_malloc_module);
     CKRETURN(ddcl_init_storage_module);
     CKRETURN(ddcl_file_module_init);
+    CKRETURN(ddcl_init_timer_module);
     CKRETURN(ddcl_init_service_module);
     CKRETURN(ddcl_init_log_module);
-    CKRETURN(ddcl_init_timer_module);
     CKRETURN(ddcl_init_socket_module);
     return 0;
 }

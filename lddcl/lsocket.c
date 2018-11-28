@@ -28,14 +28,22 @@ l_parse_socket_rsp (lua_State * L){
         break;
     }
     ddcl_SocketRsp * rsp = (ddcl_SocketRsp *)data;
+    lua_newtable(L);
+    lua_pushstring(L, "fd");
     lua_pushinteger(L, rsp->fd);
+    lua_rawset(L, -3);
+
+    lua_pushstring(L, "cmd");
     lua_pushinteger(L, rsp->cmd);
+    lua_rawset(L, -3);
+
+
     if(rsp->cmd == DDCL_SOCKET_READ){
+        lua_pushstring(L, "data");
         lua_pushlstring(L, data + sizeof(ddcl_SocketRsp), sz - sizeof(ddcl_SocketRsp));
-        return 3;
-    }else{
-        return 2;
+        lua_rawset(L, -3);
     }
+    return 1;
 }
 
 static int

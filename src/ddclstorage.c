@@ -41,7 +41,7 @@ struct {
 }_R;
 #endif
 
-#define MAX_EXPEND_SIZE     10000
+#define MAX_EXPEND_SIZE     10240
 
 static Slot *
 _new_slot(dduint32 ele_sz, dduint32 size) {

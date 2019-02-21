@@ -1,10 +1,10 @@
 #define DDCLLUA_CORE
 
-#include "lcl.h"
-#include "lddclservice.h"
 #include "ddclservice.h"
 #include "ddclmalloc.h"
 #include "ddcllog.h"
+
+#include "lua_ddclservice.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -159,7 +159,7 @@ _excute_resp_msg(ddcl_Msg * msg){
     lua_rawget(L, -2);
 
     if (msg->cmd == DDCL_CMD_TIMEOUT) {
-        printf("%d\n", msg->cmd);
+        //printf("%d\n", msg->cmd);
 
     }
 
@@ -612,7 +612,6 @@ openlib_service (lua_State * L){
     DDLUA_PUSHENUM(L, "DDCL_CMD_LOG",           DDCL_CMD_LOG);
     DDLUA_PUSHENUM(L, "DDCL_CMD_START",         DDCL_CMD_START);
     DDLUA_PUSHENUM(L, "DDCL_CMD_END",           DDCL_CMD_END);
-
 
 
     DDLUA_PUSHFUNC(L, "new_service", l_new_service);

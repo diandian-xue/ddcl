@@ -1,10 +1,10 @@
 #define DDCLLUA_CORE
 
-#include "lcl.h"
-#include "lddclservice.h"
-
 #include "ddclsocket.h"
 #include "ddclerr.h"
+
+#include "lua_ddcl.h"
+#include "lua_ddclservice.h"
 
 #include <stdio.h>
 #include <stdlib.h>

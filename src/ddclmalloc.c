@@ -46,7 +46,10 @@ DDCLAPI void
 ddcl_freeR(void * p){
     free(p);
     ddcl_lock_spin(&_lock);
-    ddcl_set_map(_map, &p, sizeof(void *), NULL, 0);
+    int ret = ddcl_set_map(_map, &p, sizeof(void *), NULL, 0);
+	if (!ret) {
+		printf("not found free: %p\n", p);
+	}
     ddcl_unlock_spin(&_lock);
 }
 

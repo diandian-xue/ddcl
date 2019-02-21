@@ -1,8 +1,9 @@
 #define DDCLLUA_CORE
 
-#include "lcl.h"
 #include "ddclmalloc.h"
 #include "ddclthread.h"
+
+#include "lua_ddcl.h"
 
 #include <stdlib.h>
 #include <stdio.h>

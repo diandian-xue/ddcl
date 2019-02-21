@@ -1,7 +1,7 @@
 #define DDCLLUA_CORE
 
-#include "lcl.h"
 #include "ddclfile.h"
+#include "lua_ddcl.h"
 
 #include <stdlib.h>
 #include <stdio.h>

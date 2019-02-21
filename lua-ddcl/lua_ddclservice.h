@@ -1,7 +1,7 @@
 #pragma once
 
 #include "ddclservice.h"
-#include "lcl.h"
+#include "lua_ddcl.h"
 
 #define LDDCL_CTX_K "lddcl_service_context"
 

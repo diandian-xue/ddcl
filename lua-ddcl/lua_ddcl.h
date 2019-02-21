@@ -43,7 +43,9 @@
 
 #define DDLUA_PUSHFUNC(L, NAME, F)  lua_pushstring(L, NAME); lua_pushcfunction(L, F); lua_settable(L, -3)
 #define DDLUA_PUSHENUM(L, NAME, M)  lua_pushstring(L, NAME); lua_pushinteger(L, M); lua_settable(L, -3)
+#define DDLUA_PUSHVALUE(L, NAME, I)  lua_pushstring(L, NAME); lua_pushvalue(L, I); lua_settable(L, -3)
+
 
 DDCLLUA int
-luaopen_lddcl_core (lua_State * L);
+luaopen_luaddcl_core (lua_State * L);
 

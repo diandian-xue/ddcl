@@ -1,8 +1,8 @@
 #define DDCLLUA_CORE
 
 #include "ddcl.h"
-#include "lcl.h"
 #include "ddcltimer.h"
+#include "lua_ddcl.h"
 
 #include <stdio.h>
 
@@ -92,9 +92,9 @@ extern int
 openlib_socket (lua_State * L);
 
 DDCLLUA int
-luaopen_lddcl_core(lua_State * L){
+luaopen_lddcl_core (lua_State * L){
     luaL_checkversion(L);
-    DDLUA_NEWLIB(L, "lddcl.core", _reg);
+    DDLUA_NEWLIB(L, "luaddcl.core", _reg);
 
     openlib_file(L);
     openlib_thread(L);

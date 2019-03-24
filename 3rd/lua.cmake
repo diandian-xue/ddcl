@@ -47,15 +47,6 @@ set_target_properties(lualib
     PROPERTIES
     OUTPUT_NAME lua)
 
-if(WIN32)
-    if(${BUILD_SHARED_LIBS})
-        target_compile_definitions(lualib PUBLIC LUA_BUILD_AS_DLL)
-    endif()
-    #target_compile_definitions(lualib PUBLIC LUA_DL_DLL)
-else()
-    target_link_libraries(lualib PUBLIC dl)
-    target_compile_definitions(lualib PUBLIC LUA_USE_DLOPEN)
-endif()
 
 add_executable(lua
     ${SRC_PATH}/src/lua.c
@@ -66,10 +57,39 @@ add_executable(luac
     ${SRC_PATH}/src/luac.c
     ${SOURCES}
     )
+    
+    
+if(WIN32)
+    if(${BUILD_SHARED_LIBS})
+        target_compile_definitions(lualib PUBLIC LUA_BUILD_AS_DLL)
+    endif()
+    target_compile_definitions(lualib PUBLIC LUA_USE_WINDOWS)
+    target_compile_definitions(luac PUBLIC LUA_USE_WINDOWS)
+    #target_compile_definitions(lualib PUBLIC LUA_DL_DLL)
+endif()
+
+    
 if(WIN32)
 else()
-    target_compile_definitions(lualib PUBLIC LUA_USE_DLOPEN)
+    #target_compile_definitions(lualib PUBLIC LUA_USE_DLOPEN)
+    #target_link_libraries(lualib PUBLIC dl)
+    #target_link_libraries(lualib PUBLIC m)
+    #target_link_libraries(luac PUBLIC m)
+endif()
+
+if(LINUX)
+    target_compile_definitions(lualib PUBLIC LUA_USE_LINUX)
+    target_compile_definitions(luac PUBLIC LUA_USE_LINUX)
+    
+    target_link_libraries(lua PUBLIC readline)
     target_link_libraries(lualib PUBLIC dl)
     target_link_libraries(lualib PUBLIC m)
     target_link_libraries(luac PUBLIC m)
+endif()
+
+
+if(MACOSX)
+    target_compile_definitions(lualib PUBLIC LUA_USE_MACOSX)
+    target_link_libraries(lua PUBLIC readline)
+    target_compile_definitions(luac PUBLIC LUA_USE_LINUX)
 endif()

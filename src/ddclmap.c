@@ -320,8 +320,8 @@ ddcl_get_map(ddcl_Map * map, void * k, size_t ksz, size_t * datasz){
     return NULL;
 }
 
-DDCLAPI dduint32
-ddcl_get_map_size(ddcl_Map * map){
+DDCLAPI size_t
+ddcl_count_map (ddcl_Map * map){
     return map->sz;
 }
 

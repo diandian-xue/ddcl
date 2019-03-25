@@ -5,6 +5,7 @@
 #include "ddclmalloc.h"
 #include "ddclerr.h"
 #include "ddcllog.h"
+#include "ddcldson.h"
 
 #ifndef DD_WINDOWS
     #include <sys/socket.h>
@@ -83,6 +84,7 @@ typedef struct tag_SocketThread{
     ddcl_SocketPoll * poll;
     ddcl_Thread thread;
     ddcl_Service svr;
+    ddcl_DsonBuffer * dson;
     int exit;
 }SocketThread;
 
@@ -126,12 +128,24 @@ static dduint32 _TCOUNT = 0;
 static void
 _rsp_socket(SocketThread * st, Socket * s,
         ddcl_Service source, ddcl_Session session, int cmd){
-    ddcl_SocketRsp rsp;
-    rsp.fd = s->h;
-    rsp.cmd = cmd;
-    rsp.sz = 0;
-    ddcl_send_b(source, st->svr, session ? DDCL_PTYPE_RESP : DDCL_PTYPE_SEND,
-        DDCL_CMD_SOCKET, session, (char *)&rsp, sizeof(rsp));
+
+    ddcl_DsonBuffer * dson = st->dson;
+	ddcl_clear_dsonbuffer(dson);
+    ddcl_push_dsonbuffer_integer(dson, s->h);
+    ddcl_push_dsonbuffer_integer(dson, cmd);
+    size_t len;
+    char * buffer = ddcl_dsonbuffer_buffer(dson, &len);
+
+    //ddcl_SocketRsp rsp;
+    //rsp.fd = s->h;
+    //rsp.cmd = cmd;
+    //rsp.sz = 0;
+    //ddcl_send_b(source, st->svr, session ? DDCL_PTYPE_RESP : DDCL_PTYPE_SEND,
+    //    DDCL_CMD_SOCKET, session, (char *)&rsp, sizeof(rsp));
+    int ptype = session ? DDCL_PTYPE_RESP : DDCL_PTYPE_SEND;
+    ptype |= DDCL_PTYPE_DSON;
+    ddcl_send_b(source, st->svr, 
+            ptype, DDCL_CMD_SOCKET, session, buffer, len);
 }
 
 static void
@@ -888,6 +902,9 @@ _socket_svr_msg_cb(ddcl_Msg * msg){
     case DDCL_CMD_EXIT:
         _exit_module(msg);
         break;
+	case DDCL_CMD_ERROR:
+		ddcl_log(msg->self, "socket resp error: %s\n", msg->data);
+		break;
     default:
         assert(0);
         break;
@@ -923,6 +940,7 @@ ddcl_init_socket_module (ddcl * conf){
         SocketThread * st = &(_T[i]);
         st->poll = ddcl_new_socket_poll();
         st->svr = ddcl_new_service_not_worker(_socket_svr_msg_cb, st);
+        st->dson = ddcl_new_dsonbuffer(512);
         ddcl_new_thread(&(st->thread), _socket_thread_fn, st, 0);
     }
     return 0;
@@ -932,6 +950,8 @@ DDCLAPI void
 ddcl_exit_socket_module (){
     for (dduint32 i = 0; i < _TCOUNT; i ++){
         SocketThread * st = &(_T[i]);
+        ddcl_free_socket_poll(st->poll);
+        ddcl_free_dsonbuffer(st->dson);
         st->exit = 1;
         ddcl_send(st->svr, 0, DDCL_PTYPE_SEND, DDCL_CMD_EXIT, 0, NULL, 0);
     }

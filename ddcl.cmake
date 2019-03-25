@@ -26,7 +26,7 @@ if(WIN32)
     target_compile_definitions(ddcl PRIVATE _CRT_SECURE_NO_WARNINGS)
     target_compile_definitions(ddcl PRIVATE _CRT_NONSTDC_NO_DEPRECATE)
 else()
-	set_target_properties(ddcl PROPERTIES COMPILE_FLAGS -std=gnu99)
+    set_target_properties(ddcl PROPERTIES COMPILE_FLAGS -std=gnu99)
 endif()
 
 if(LINUX)

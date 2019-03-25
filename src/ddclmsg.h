@@ -2,7 +2,8 @@
 
 enum {
     DDCL_PTYPE_SEND = 1,
-    DDCL_PTYPE_RESP,
+    DDCL_PTYPE_RESP = 1 << 1,
+    DDCL_PTYPE_DSON = 1 << 2,
 
     DDCL_PTYPE_END,
 };

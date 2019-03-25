@@ -22,22 +22,6 @@ _print_vaule (lua_State * L, char * msg){
     lua_pop(L, 1);
 }
 
-DDCLLUA int
-lddcl_yield_for_session(lua_State * L, Context * ctx, ddcl_Session session){
-    lua_rawgetp(L, LUA_REGISTRYINDEX, &ctx->session_map);
-    lua_pushinteger(L, session);
-    lua_pushthread(L);
-    lua_rawset(L, -3);
-    lua_pop(L, 1);
-    return lua_yield(L, 0);
-}
-
-DDCLLUA int
-lddcl_set_newservice_hook(lua_CFunction f){
-    _hookf = f;
-    return 0;
-}
-
 static void
 _new_session_table(lua_State * L, ddcl_Service from, ddcl_Session session){
     lua_newtable(L);
@@ -45,6 +29,30 @@ _new_session_table(lua_State * L, ddcl_Service from, ddcl_Session session){
     lua_rawseti(L, -2, 1);
     lua_pushinteger(L, session);
     lua_rawseti(L, -2, 2);
+}
+
+static int
+_push_dson2state(lua_State * L, ddcl_DsonBuffer * dson){
+    int count = 0;
+    ddcl_begin_dsonbuffer(dson);
+    ddcl_Dson d;
+    while(ddcl_next_dsonbuffer(dson, &d)){
+        switch(d.type){
+        case DDCL_DSON_INTEGER:
+            count ++;
+            lua_pushinteger(L, d.u.integer);
+            break;
+        case DDCL_DSON_NUMBER:
+            count ++;
+            lua_pushnumber(L, d.u.number);
+            break;
+        case DDCL_DSON_STRING:
+            count ++;
+            lua_pushlstring(L, d.u.string, d.size);
+            break;
+        }
+    }
+    return count;
 }
 
 static void
@@ -121,15 +129,28 @@ _callmsg_in_coroutine(ddcl_Msg * msg, void * fn_flag){
         lua_pop(L, 1);
     }
 
-    lua_pushlightuserdata(L, (void *)msg->data);
-    lua_pushinteger(L, msg->sz);
+    int count = 1;
+    lua_newtable(L);
+    int ti = 1;
     lua_pushinteger(L, msg->ptype);
+    lua_seti(L, -2, ti++);
     lua_pushinteger(L, msg->cmd);
+    lua_seti(L, -2, ti++);
     lua_pushinteger(L, msg->session);
+    lua_seti(L, -2, ti++);
     lua_pushinteger(L, msg->self);
+    lua_seti(L, -2, ti++);
     lua_pushinteger(L, msg->from);
+    lua_seti(L, -2, ti++);
 
-    _resume_coroutine(ctx, L, NULL, 7);
+    if(msg->ptype & DDCL_PTYPE_DSON){
+        count += _push_dson2state(L, (ddcl_DsonBuffer *)msg->data);
+    }else{
+        lua_pushlightuserdata(L, (void *)msg->data);
+        lua_pushinteger(L, msg->sz);
+        count += 2;
+    }
+    _resume_coroutine(ctx, L, NULL, count);
     lua_settop(L, 0);
     return 0;
 }
@@ -184,9 +205,14 @@ _excute_resp_msg(ddcl_Msg * msg){
         return 0;
     }
     lua_settop(nL, 0);
-    lua_pushlightuserdata(nL, (void *)msg->data);
-    lua_pushinteger(nL, msg->sz);
-    _resume_coroutine(ctx, nL, L, 2);
+    if(msg->ptype & DDCL_PTYPE_DSON){
+        int count = _push_dson2state(nL, (ddcl_DsonBuffer *)msg->data);
+        _resume_coroutine(ctx, nL, L, count);
+    }else{
+        lua_pushlightuserdata(nL, (void *)msg->data);
+        lua_pushinteger(nL, msg->sz);
+        _resume_coroutine(ctx, nL, L, 2);
+    }
     lua_settop(nL, 0);
     lua_settop(L, 0);
     return 0;
@@ -197,16 +223,11 @@ l_msg_cbfn(ddcl_Msg * msg){
     Context * ctx = (Context *)msg->ud;
     lua_State * L = ctx->L;
     int top = lua_gettop(L);
-    switch(msg->ptype){
-        case DDCL_PTYPE_SEND:
-            _excute_send_msg(msg);
-            break;
-        case DDCL_PTYPE_RESP:
-            _excute_resp_msg(msg);
-            break;
-        default:
-            _excute_send_msg(msg);
-            break;
+    if (msg->ptype & DDCL_PTYPE_RESP) {
+        _excute_resp_msg(msg);
+    }
+    else {
+        _excute_send_msg(msg);
     }
     lua_settop(L, top);
     return 0;
@@ -244,6 +265,7 @@ l_exit_service_cb(ddcl_Service h, void * ud){
     if (!ctx->be_main) {
         lua_close(L);
     }
+    ddcl_free_dsonbuffer(ctx->dson);
     ddcl_free(ctx);
 }
 
@@ -256,19 +278,6 @@ l_new_service (lua_State * L){
     LDDCL_FIND_CTX;
     */
 
-    Context * new_ctx = ddcl_malloc(sizeof(Context));
-    memset(new_ctx, 0, sizeof(Context));
-    new_ctx->is_worker = 1;
-    lua_State * nL = luaL_newstate();
-    if(_hookf){
-        _hookf(nL);
-    }
-    luaL_openlibs(nL);
-    new_ctx->L = nL;
-    lua_pushstring(nL, LDDCL_CTX_K);
-    lua_pushlightuserdata(nL, new_ctx);
-    lua_rawset(nL, LUA_REGISTRYINDEX);
-
     lua_getglobal(L, "package");
     lua_pushstring(L, "path");
     lua_rawget(L, -2);
@@ -278,39 +287,7 @@ l_new_service (lua_State * L){
     const char * cpath = lua_tostring(L, -1);
     lua_pop(L, 3);
 
-
-    lua_getglobal(nL, "package");
-    lua_pushstring(nL, "path");
-    lua_pushstring(nL, path);
-    lua_rawset(nL, -3);
-
-    lua_pushstring(nL, "cpath");
-    lua_pushstring(nL, cpath);
-    lua_rawset(nL, -3);
-    lua_pop(nL, 1);
-
-    if(luaL_loadstring(nL, script) || !lua_pushstring(nL, param) || lua_pcall(nL, 1, 0, 0)){
-        ddcl_free(new_ctx);
-        size_t errsz;
-        const char * errstr = lua_tolstring(nL, -1, &errsz);
-        luaL_traceback(L, nL, errstr, 0);
-        const char * tb_errstr = lua_tostring(L, -1);
-        lua_close(nL);
-        return luaL_error(L, "load lua error:\n%s", tb_errstr);
-    }
-
-    ddcl_Service svr = ddcl_new_service(l_msg_cbfn, new_ctx);
-    ddcl_exit_service_cb(svr, l_exit_service_cb);
-    new_ctx->svr = svr;
-
-    lua_newtable(nL);
-    lua_rawsetp(nL, LUA_REGISTRYINDEX, &new_ctx->session_map);
-
-    lua_newtable(nL);
-    lua_rawsetp(nL, LUA_REGISTRYINDEX, &new_ctx->co_map);
-
-    ddcl_send_b(svr, 0, DDCL_PTYPE_SEND, DDCL_CMD_START, 0, NULL, 0);
-
+    ddcl_Service svr = lddcl_new_luaservice(L, path, cpath, script, param);
     lua_pushinteger(L, svr);
     return 1;
 }
@@ -387,8 +364,9 @@ l_start_non_worker(lua_State * L){
     luaL_checktype(L, 2, LUA_TFUNCTION);
 
     Context * ctx = ddcl_malloc(sizeof(Context));
-    ctx->is_worker = 0;
     memset(ctx, 0, sizeof(Context));
+    ctx->is_worker = 0;
+    ctx->dson = ddcl_new_dsonbuffer(512);
     ddcl_Service svr = ddcl_new_service_not_worker(l_msg_cbfn, ctx);
     ddcl_exit_service_cb(svr, l_exit_service_cb);
     ctx->L = L;
@@ -417,35 +395,72 @@ l_start_non_worker(lua_State * L){
 static int
 l_send (lua_State * L){
     ddcl_Service to = (ddcl_Service)luaL_checkinteger(L, 1);
-    size_t sz;
-    const char * str = luaL_checklstring(L, 2, &sz);
+    LDDCL_FIND_CTX;
+    ddcl_Service from = ctx->svr;
 
-    ddcl_Service from = 0;
-    lua_pushstring(L, LDDCL_CTX_K);
-    lua_rawget(L, LUA_REGISTRYINDEX);
-    if(!lua_isnil(L, -1)){
-        Context * ctx = lua_touserdata(L, -1);
-        from = ctx->svr;
+    int top = lua_gettop(L);
+    if(top > 1){
+        ddcl_DsonBuffer * dson = ctx->dson;
+        ddcl_clear_dsonbuffer(dson);
+        for(int i = 2; i <= top; i ++){
+            switch(lua_type(L, i)){
+            case LUA_TNUMBER:
+                ddcl_push_dsonbuffer_number(dson, lua_tonumber(L, i));
+                break;
+            case LUA_TSTRING:
+                {
+                    size_t sz;
+                    const char * str = lua_tolstring(L, i, &sz);
+                    ddcl_push_dsonbuffer_string(dson, str, sz);
+                    break;
+                }
+            }
+        }
+        size_t len;
+        char * buffer = ddcl_dsonbuffer_buffer(dson, &len);
+        ddcl_send_b(to, from, DDCL_PTYPE_SEND | DDCL_PTYPE_DSON,
+                DDCL_CMD_TEXT, 0, (void *)buffer, len);
+    }else{
+        ddcl_send_b(to, from,
+                DDCL_PTYPE_SEND, DDCL_CMD_TEXT, 0, NULL, 0);
     }
-
-    ddcl_send_b(to, from,
-            DDCL_PTYPE_SEND, DDCL_CMD_TEXT, 0, (void *)str, sz);
-
-    lua_pop(L, 1);
+    lua_settop(L, top);
     return 0;
 }
 
 static int
 l_call (lua_State * L){
     ddcl_Service to = (ddcl_Service)luaL_checkinteger(L, 1);
-    size_t sz;
-    const char * str = luaL_checklstring(L, 2, &sz);
-
     LDDCL_FIND_CTX;
-
+    ddcl_Service from = ctx->svr;
     ddcl_Session session;
-    int ret = ddcl_call_b(to, ctx->svr, DDCL_PTYPE_SEND,
-                DDCL_CMD_TEXT, &session, (void *)str, sz);
+    int top = lua_gettop(L);
+    int ret;
+    if(top > 1){
+        ddcl_DsonBuffer * dson = ctx->dson;
+        ddcl_clear_dsonbuffer(dson);
+        for(int i = 2; i <= top; i ++){
+            switch(lua_type(L, i)){
+            case LUA_TNUMBER:
+                ddcl_push_dsonbuffer_number(dson, lua_tonumber(L, i));
+                break;
+            case LUA_TSTRING:
+                {
+                    size_t sz;
+                    const char * str = lua_tolstring(L, i, &sz);
+                    ddcl_push_dsonbuffer_string(dson, str, sz);
+                    break;
+                }
+            }
+        }
+        size_t len;
+        char * buffer = ddcl_dsonbuffer_buffer(dson, &len);
+        ret = ddcl_call_b(to, from, DDCL_PTYPE_SEND | DDCL_PTYPE_DSON,
+                DDCL_CMD_TEXT, &session, (void *)buffer, len);
+    }else{
+        ret = ddcl_call_b(to, from, DDCL_PTYPE_SEND,
+            DDCL_CMD_TEXT, &session, NULL, 0);
+    }
     if(ret){
         return luaL_error(L, ddcl_err(ret));
     }
@@ -455,9 +470,9 @@ l_call (lua_State * L){
 static int
 l_resp (lua_State * L){
     size_t sz;
-    const char * str = luaL_checklstring(L, 1, &sz);
 
     LDDCL_FIND_CTX;
+    int top = lua_gettop(L);
 
     lua_rawgetp(L, LUA_REGISTRYINDEX, &ctx->co_map);
     lua_rawgetp(L, -1, L);
@@ -472,8 +487,33 @@ l_resp (lua_State * L){
     ddcl_Session session = lua_tointeger(L, -1);
     lua_pop(L, 4);
 
-    int err = ddcl_send_b(from, ctx->svr,
-                DDCL_PTYPE_RESP, DDCL_CMD_TEXT, session, (void *)str, sz);
+    int err;
+    if(top > 0){
+        ddcl_DsonBuffer * dson = ctx->dson;
+        ddcl_clear_dsonbuffer(dson);
+        for(int i = 1; i <= top; i ++){
+            switch(lua_type(L, i)){
+            case LUA_TNUMBER:
+                ddcl_push_dsonbuffer_number(dson, lua_tonumber(L, i));
+                break;
+            case LUA_TSTRING:
+                {
+                    size_t sz;
+                    const char * str = lua_tolstring(L, i, &sz);
+                    ddcl_push_dsonbuffer_string(dson, str, sz);
+                    break;
+                }
+            }
+        }
+        size_t len;
+        char * buffer = ddcl_dsonbuffer_buffer(dson, &len);
+        err = ddcl_send_b(from, ctx->svr, DDCL_PTYPE_RESP | DDCL_PTYPE_DSON,
+                DDCL_CMD_TEXT, session, (void *)buffer, len);
+    }else{
+        err = ddcl_send_b(from, ctx->svr,
+                DDCL_PTYPE_RESP, DDCL_CMD_TEXT, session, NULL, 0);
+    }
+
     if(err){
         return luaL_error(L, "resp error:%s \n%s", ddcl_err(err));
     }
@@ -633,3 +673,84 @@ openlib_service (lua_State * L){
 
     return 0;
 }
+
+DDCLLUA int
+lddcl_yield_for_session(lua_State * L, Context * ctx, ddcl_Session session){
+    lua_rawgetp(L, LUA_REGISTRYINDEX, &ctx->session_map);
+    lua_pushinteger(L, session);
+    lua_pushthread(L);
+    lua_rawset(L, -3);
+    lua_pop(L, 1);
+    return lua_yield(L, 0);
+}
+
+DDCLLUA int
+lddcl_set_newservice_hook(lua_CFunction f){
+    _hookf = f;
+    return 0;
+}
+
+DDCLLUA ddcl_Service
+lddcl_new_luaservice (lua_State * L,
+        const char * path, const char * cpath,
+        const char * script, const char * param)
+{
+
+    Context * new_ctx = ddcl_malloc(sizeof(Context));
+    memset(new_ctx, 0, sizeof(Context));
+    new_ctx->dson = ddcl_new_dsonbuffer(512);
+    new_ctx->is_worker = 1;
+    lua_State * nL = luaL_newstate();
+    if(_hookf){
+        _hookf(nL);
+    }
+    luaL_openlibs(nL);
+    new_ctx->L = nL;
+    lua_pushstring(nL, LDDCL_CTX_K);
+    lua_pushlightuserdata(nL, new_ctx);
+    lua_rawset(nL, LUA_REGISTRYINDEX);
+
+    lua_getglobal(nL, "package");
+    lua_pushstring(nL, "path");
+    lua_pushstring(nL, path);
+    lua_rawset(nL, -3);
+
+    lua_pushstring(nL, "cpath");
+    lua_pushstring(nL, cpath);
+    lua_rawset(nL, -3);
+    lua_pop(nL, 1);
+
+    if(luaL_loadstring(nL, script) || !lua_pushstring(nL, param) || lua_pcall(nL, 1, 0, 0)){
+        ddcl_free(new_ctx);
+        ddcl_free_dsonbuffer(new_ctx->dson);
+        size_t errsz;
+        const char * errstr = lua_tolstring(nL, -1, &errsz);
+        if(L){
+            luaL_traceback(L, nL, errstr, 0);
+            const char * tb_errstr = lua_tostring(L, -1);
+            lua_close(nL);
+            luaL_error(L, "load lua error:\n%s", tb_errstr);
+            return 0;
+        }else{
+            luaL_traceback(nL, nL, errstr, 0);
+            const char * tb_errstr = lua_tostring(nL, -1);
+            printf("load lua error:\n%s", tb_errstr);
+            lua_close(nL);
+            return 0;
+        }
+    }
+
+    ddcl_Service svr = ddcl_new_service(l_msg_cbfn, new_ctx);
+    ddcl_exit_service_cb(svr, l_exit_service_cb);
+    new_ctx->svr = svr;
+
+    lua_newtable(nL);
+    lua_rawsetp(nL, LUA_REGISTRYINDEX, &new_ctx->session_map);
+
+    lua_newtable(nL);
+    lua_rawsetp(nL, LUA_REGISTRYINDEX, &new_ctx->co_map);
+
+    ddcl_send_b(svr, 0, DDCL_PTYPE_SEND, DDCL_CMD_START, 0, NULL, 0);
+    return svr;
+}
+

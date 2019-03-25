@@ -92,7 +92,7 @@ extern int
 openlib_socket (lua_State * L);
 
 DDCLLUA int
-luaopen_lddcl_core (lua_State * L){
+luaopen_ddcllua_core (lua_State * L){
     luaL_checkversion(L);
     DDLUA_NEWLIB(L, "luaddcl.core", _reg);
 

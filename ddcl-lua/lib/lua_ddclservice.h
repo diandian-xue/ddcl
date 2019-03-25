@@ -1,12 +1,14 @@
 #pragma once
 
 #include "ddclservice.h"
+#include "ddcldson.h"
 #include "lua_ddcl.h"
 
 #define LDDCL_CTX_K "lddcl_service_context"
 
 typedef struct tag_Context{
     lua_State * L;
+    ddcl_DsonBuffer * dson;
     ddcl_Service svr;
     int is_worker;
     int be_main;
@@ -38,3 +40,8 @@ lddcl_yield_for_session(
 
 DDCLLUA int
 lddcl_set_newservice_hook(lua_CFunction f);
+
+DDCLLUA ddcl_Service
+lddcl_new_luaservice (lua_State * L,
+        const char * path, const char * cpath,
+        const char * script, const char * param);

@@ -51,7 +51,8 @@
         #define DDSOCKETPOLL_USE_SELECT
     #endif
 
-#endif -- #ifndef DDSOCKETPOLL_USE_SELECT
+#endif // #ifndef DDSOCKETPOLL_USE_SELECT
+
 
 
 

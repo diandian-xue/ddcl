@@ -7,6 +7,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <memory.h>
 
 typedef struct tag_Param{
     char * script;
@@ -14,7 +15,8 @@ typedef struct tag_Param{
 }Param;
 
 static void *
-_exc_thread_fn(Param * p){
+_exc_thread_fn(void * arg){
+    Param * p = (Param *)arg;
     lua_State * L = luaL_newstate();
     luaL_openlibs(L);
     int ret = luaL_loadstring(L, p->script);

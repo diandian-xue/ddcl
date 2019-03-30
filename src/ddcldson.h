@@ -25,42 +25,42 @@ typedef struct tag_ddcl_Dson {
 }ddcl_Dson;
 
 
-DDCLAPI inline ddcl_DsonBuffer *
+DDCLAPI ddcl_DsonBuffer *
 ddcl_new_dsonbuffer (size_t cap);
 
-DDCLAPI inline void
+DDCLAPI void
 ddcl_free_dsonbuffer (ddcl_DsonBuffer * dson);
 
-DDCLAPI inline size_t
+DDCLAPI size_t
 ddcl_push_dsonbuffer_integer (ddcl_DsonBuffer * dson, ddint64 num);
 
-DDCLAPI inline size_t
+DDCLAPI size_t
 ddcl_push_dsonbuffer_number (ddcl_DsonBuffer * dson, double num);
 
-DDCLAPI inline size_t
+DDCLAPI  size_t
 ddcl_push_dsonbuffer_string (
         ddcl_DsonBuffer * dson, const char * str, size_t len);
 
-DDCLAPI inline size_t
+DDCLAPI size_t
 ddcl_push_dsonbuffer_array (
         ddcl_DsonBuffer * dson, ddcl_DsonBuffer * array);
 
-DDCLAPI inline size_t
+DDCLAPI size_t
 ddcl_push_dsonbuffer_map (
         ddcl_DsonBuffer * dson, ddcl_DsonBuffer * map);
 
-DDCLAPI inline size_t
+DDCLAPI size_t
 ddcl_check_expand_dsonbuffer (
         ddcl_DsonBuffer * dson, size_t cap);
 
-DDCLAPI inline int
+DDCLAPI int
 ddcl_begin_dsonbuffer (ddcl_DsonBuffer * dson);
 
-DDCLAPI inline int
+DDCLAPI int
 ddcl_next_dsonbuffer (ddcl_DsonBuffer * dson, ddcl_Dson * v);
 
-DDCLAPI inline char *
+DDCLAPI char *
 ddcl_dsonbuffer_buffer (ddcl_DsonBuffer * dson, size_t * len);
 
-DDCLAPI inline void
+DDCLAPI void
 ddcl_clear_dsonbuffer (ddcl_DsonBuffer * dson);

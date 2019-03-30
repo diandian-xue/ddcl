@@ -130,7 +130,7 @@ _rsp_socket(SocketThread * st, Socket * s,
         ddcl_Service source, ddcl_Session session, int cmd){
 
     ddcl_DsonBuffer * dson = st->dson;
-	ddcl_clear_dsonbuffer(dson);
+    ddcl_clear_dsonbuffer(dson);
     ddcl_push_dsonbuffer_integer(dson, s->h);
     ddcl_push_dsonbuffer_integer(dson, cmd);
     size_t len;
@@ -144,27 +144,27 @@ _rsp_socket(SocketThread * st, Socket * s,
     //    DDCL_CMD_SOCKET, session, (char *)&rsp, sizeof(rsp));
     int ptype = session ? DDCL_PTYPE_RESP : DDCL_PTYPE_SEND;
     ptype |= DDCL_PTYPE_DSON;
-    ddcl_send_b(source, st->svr, 
+    ddcl_send_b(source, st->svr,
             ptype, DDCL_CMD_SOCKET, session, buffer, len);
 }
 
 static void
-_rsp_read(ddcl_Service self, ddcl_Socket h, ddcl_Service source, 
+_rsp_read(SocketThread * st, Socket * s, ddcl_Service source, 
     ddcl_Session session, int cmd, char * data, size_t sz){
-    ddcl_SocketRsp rsp;
-    rsp.fd = h;
-    rsp.cmd = cmd;
-    rsp.sz = sz;
-    char * buf = (char *)&rsp;
-    if (sz > 0){
-        buf = ddcl_malloc(sizeof(rsp) + sz);
-        memcpy(buf, &rsp, sizeof(rsp));
-        memcpy(buf + sizeof(rsp), data, sz);
+    ddcl_DsonBuffer * dson = st->dson;
+    ddcl_clear_dsonbuffer(dson);
+    ddcl_push_dsonbuffer_integer(dson, s->h);
+    ddcl_push_dsonbuffer_integer(dson, cmd);
+    if(data){
+        ddcl_push_dsonbuffer_string(dson, data, sz);
+        ddcl_push_dsonbuffer_integer(dson, sz);
     }
-    ddcl_send_b(source, self, session ? DDCL_PTYPE_RESP : DDCL_PTYPE_SEND,
-        DDCL_CMD_SOCKET, session, buf, sizeof(rsp) + sz);
-    if(sz > 0)
-        ddcl_free(buf);
+    size_t len;
+    char * buffer = ddcl_dsonbuffer_buffer(dson, &len);
+    int ptype = session ? DDCL_PTYPE_RESP : DDCL_PTYPE_SEND;
+    ptype |= DDCL_PTYPE_DSON;
+    ddcl_send_b(source, st->svr, ptype,
+        DDCL_CMD_SOCKET, session, buffer, len);
 }
 
 static char *
@@ -237,7 +237,7 @@ _free_read_buff (Socket * s, ReadBuff * rb){
     ReadBuff * tmp;
     while(rb){
         tmp = rb;
-        _rsp_read(s->st->svr, s->h, rb->source,
+        _rsp_read(s->st, s, rb->source,
             rb->session, DDCL_SOCKET_ERROR, NULL, 0);
         rb = rb->next;
         ddcl_free(tmp);
@@ -447,7 +447,7 @@ _connected_event_by_forward (SocketThread * st, Socket * s, int evt){
         for(;;){
             rsz = recv(s->fd, s->crbuf, DEFAULT_RECV_SIZE, 0);
             if(rsz > 0){
-                _rsp_read(st->svr, s->h, s->source, 0,
+                _rsp_read(st, s, s->source, 0,
                         DDCL_SOCKET_READ, s->crbuf, rsz);
                 if(rsz < DEFAULT_RECV_SIZE){
                     break;
@@ -496,7 +496,7 @@ _execute_event_on_fd_connected(SocketThread * st, Socket * s, int evt) {
         while(rb){
             if(s->cbuf_sz > 0 && s->cbuf_sz >= rb->sz){
                 rbuf = _read_cache_buff(s, rb->sz);
-                _rsp_read(st->svr, s->h, rb->source, rb->session,
+                _rsp_read(st, s, rb->source, rb->session,
                     DDCL_SOCKET_READ, rbuf, rb->sz);
                 ddcl_free(rbuf);
                 rb = _pop_read_buff(s);
@@ -745,20 +745,27 @@ _excute_read_cmd(SocketCmd * cmd, ddcl_Service source, ddcl_Session session){
     char * rbuf;
     for(;;){
         if(s->cbuf_sz > 0 && s->cbuf_sz >= sz){
-            if(sz == 0)
+            if(sz == 0){
                 sz = s->cbuf_sz;
-            _rsp_read(s->st->svr, s->h, source, session,
-                DDCL_SOCKET_READ, _read_cache_buff(s, sz), sz);
+            }
+            rbuf = _read_cache_buff(s, sz);
+            _rsp_read(s->st, s, source, session,
+                DDCL_SOCKET_READ, rbuf, sz);
+            ddcl_free(rbuf);
             return;
         }
-        if (sz == 0)
+        if (sz == 0){
             rlen = DEFAULT_RECV_SIZE;
-        else
+        }
+        else{
             rlen = sz - s->cbuf_sz;
-        if(rlen <= DEFAULT_RECV_SIZE)
+        }
+        if(rlen <= DEFAULT_RECV_SIZE){
             rbuf = s->crbuf;
-        else
+        }
+        else{
             rbuf = ddcl_malloc(rlen);
+        }
 
         int rsz = recv(s->fd, rbuf, (int)rlen, 0);
         if(rsz > 0){
@@ -773,8 +780,9 @@ _excute_read_cmd(SocketCmd * cmd, ddcl_Service source, ddcl_Session session){
     }
 
     _push_read_buff(s, sz, source, session);
-    if(!(s->poll_evt & DDSOCKETPOLL_READ))
+    if(!(s->poll_evt & DDSOCKETPOLL_READ)){
         _add_evt_2_poll(s->st->poll, s, DDSOCKETPOLL_READ);
+    }
 }
 
 static void
@@ -812,7 +820,7 @@ _excute_close_cmd(SocketCmd * cmd, ddcl_Service source, ddcl_Session session){
     if(s && s->fd == cmd->fd){
         _del_fd(s);
     }else{
-        printf("unknow fd be close %ld\n", cmd->h);
+        //printf("unknow fd be close %ld\n", cmd->h);
     }
 }
 
@@ -902,9 +910,9 @@ _socket_svr_msg_cb(ddcl_Msg * msg){
     case DDCL_CMD_EXIT:
         _exit_module(msg);
         break;
-	case DDCL_CMD_ERROR:
-		ddcl_log(msg->self, "socket resp error: %s\n", msg->data);
-		break;
+    case DDCL_CMD_ERROR:
+        ddcl_log(msg->self, "socket resp error: %s\n", msg->data);
+        break;
     default:
         assert(0);
         break;

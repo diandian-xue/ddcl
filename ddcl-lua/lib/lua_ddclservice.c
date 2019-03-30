@@ -218,7 +218,7 @@ _excute_resp_msg(ddcl_Msg * msg){
     return 0;
 }
 
-static int
+static void
 l_msg_cbfn(ddcl_Msg * msg){
     Context * ctx = (Context *)msg->ud;
     lua_State * L = ctx->L;
@@ -230,7 +230,6 @@ l_msg_cbfn(ddcl_Msg * msg){
         _excute_send_msg(msg);
     }
     lua_settop(L, top);
-    return 0;
 }
 
 static void
@@ -469,8 +468,6 @@ l_call (lua_State * L){
 
 static int
 l_resp (lua_State * L){
-    size_t sz;
-
     LDDCL_FIND_CTX;
     int top = lua_gettop(L);
 

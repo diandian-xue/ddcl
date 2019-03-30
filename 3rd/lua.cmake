@@ -51,7 +51,7 @@ set_target_properties(lualib
 add_executable(lua
     ${SRC_PATH}/src/lua.c
     )
-target_link_libraries(lua lualib)
+target_link_libraries(lua PUBLIC lualib)
     
 add_executable(luac
     ${SRC_PATH}/src/luac.c
@@ -79,12 +79,26 @@ endif()
 
 if(LINUX)
     target_compile_definitions(lualib PUBLIC LUA_USE_LINUX)
-    target_compile_definitions(luac PUBLIC LUA_USE_LINUX)
-    
-    target_link_libraries(lua PUBLIC readline)
     target_link_libraries(lualib PUBLIC dl)
-    target_link_libraries(lualib PUBLIC m)
-    target_link_libraries(luac PUBLIC m)
+    target_link_libraries(luac PUBLIC dl)
+    target_compile_definitions(luac PUBLIC LUA_USE_LINUX)
+
+    find_library(M_LIBRARY NAMES m)
+    if(NOT M_LIBRARY)
+        message(FATAL_ERROR "libm not founded.")
+    else()
+        target_link_libraries(lualib PUBLIC ${M_LIBRARY})
+        target_link_libraries(luac PUBLIC m)
+    endif()
+
+    
+    find_library(READLINE_LIBRARY
+        NAMES readline)
+    if(NOT READLINE_LIBRARY)
+        message(STATUS "libreadline not found;")
+    else()
+        target_link_libraries(lua PUBLIC ${READLINE_LIBRARY})
+    endif()
 endif()
 
 

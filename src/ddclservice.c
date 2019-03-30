@@ -308,7 +308,7 @@ ddcl_exit_service_module (){
     ddcl_begin_map(_M.t_map);
     ddcl_Thread * thread;
     int * bworker = 0;
-    while(ddcl_next_map(_M.t_map, &thread, NULL, (void **)&bworker, NULL)){
+    while(ddcl_next_map(_M.t_map, (void**)&thread, NULL, (void **)&bworker, NULL)){
         if(*bworker){
             ddcl_join_thread(*thread);
         }

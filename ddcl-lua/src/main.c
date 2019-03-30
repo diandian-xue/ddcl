@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "ddcldson.h"
 
@@ -22,6 +23,12 @@ static const char SCRIPT[] = ""\
 "end) \n" \
 "";
 
+#define LUAPATH "./?.lua"
+#ifdef DD_WINDOWS
+#define LUACPATH "./?.dll"
+#else
+#define LUACPATH "./?.so"
+#endif
 
 
 static int open_dd_library(lua_State * L){
@@ -37,7 +44,7 @@ int main (int argc, char **argv) {
 
     lddcl_set_newservice_hook(open_dd_library);
 
-    ddcl_Service svr = lddcl_new_luaservice(NULL, "", "", SCRIPT, "");
+    ddcl_Service svr = lddcl_new_luaservice(NULL, LUAPATH, LUACPATH, SCRIPT, "");
 
     ddcl_DsonBuffer * dson = ddcl_new_dsonbuffer(0);
     char * dsonbuf;

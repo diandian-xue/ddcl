@@ -120,7 +120,7 @@ ddcl_check_expand_dsonbuffer (
 
 DDCLAPI inline int
 ddcl_begin_dsonbuffer (ddcl_DsonBuffer * dson){
-    dson->iter = 0;
+    dson->iter = sizeof(ddcl_DsonBuffer);
     return 0;
 }
 
@@ -129,7 +129,7 @@ ddcl_next_dsonbuffer (ddcl_DsonBuffer * dson, ddcl_Dson * v){
     if(dson->iter >= dson->len){
         return 0;
     }
-    char * b = dson->buffer + sizeof(ddcl_DsonBuffer) + dson->iter;
+    char * b = dson->buffer + dson->iter;
     v->type = b[0];
     v->size = 0;
     switch(b[0]){

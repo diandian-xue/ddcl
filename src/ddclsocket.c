@@ -1166,8 +1166,9 @@ ddcl_send_socket(ddcl_Socket fd, ddcl_Service from, const void * buf, size_t sz)
 DDCLAPI int
 ddcl_close_socket(ddcl_Socket fd, ddcl_Service from){
     Socket * s = _find_socket(fd);
-    if (!s)
+    if (!s){
         return DDCLSOCKET_INVALID_HANDLE;
+    }
 
     SocketCmd cmd;
     cmd.cmd = _SCMD_CLOSE;
@@ -1204,3 +1205,4 @@ ddcl_forward_socket (ddcl_Socket fd, ddcl_Service from){
         DDCL_CMD_SOCKET, 0, (char *)&cmd, sizeof(SocketCmd));
     return DDCL_OK;
 }
+

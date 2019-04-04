@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 2.8)
 
-set(SRC_PATH ${PROJECT_SOURCE_DIR}/3rd/lua)
+set(SRC_PATH ${CMAKE_CURRENT_SOURCE_DIR}/3rd/lua)
 
 file(GLOB HEADERS ${SRC_PATH}/src/*.h)
 set(SOURCES

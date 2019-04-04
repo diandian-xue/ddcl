@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 2.8)
 
-set(LUA_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/3rd/lua/src)
+set(LUA_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/3rd/lua/src)
 
-set(SRC_PATH ${PROJECT_SOURCE_DIR}/3rd/lua-cjson)
+set(SRC_PATH ${CMAKE_CURRENT_SOURCE_DIR}/3rd/lua-cjson)
 set(SOURCES
     ${SRC_PATH}/lua_cjson.c
     ${SRC_PATH}/strbuf.c

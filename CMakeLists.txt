@@ -1,10 +1,10 @@
 cmake_minimum_required(VERSION 2.8)
 
 project(ddcl)
+set(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR})
+set(LIBRARY_OUTPUT_PATH ${PROJECT_BINARY_DIR})
+
 
 include(ddcl.cmake)
-include(3rd/lua.cmake)
-include(3rd/lua-cjson.cmake)
-include(ddcl-lua/ddcl-lua.cmake)
-
+add_subdirectory(ddcl-lua/ ddcl-lua)
 

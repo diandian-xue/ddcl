@@ -144,9 +144,6 @@ _expand_service_queue (Service * svr, dduint32 new_cap){
 static void
 _push_service_queue (Service * svr, ddcl_Service self, int ptype, 
     int cmd, ddcl_Session session, const char * data, size_t sz, int free){
-	if (cmd == 4) {
-		printf("xx");
-	}
     ddcl_lock_spin(&(svr->lock));
     svr->queue_count++;
     ddcl_Msg * msg = &(svr->queue[svr->tail]);

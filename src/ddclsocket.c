@@ -397,7 +397,9 @@ _del_fd (Socket * s){
     if(s->forward){
         _rsp_socket(s->st, s, s->source, 0, DDCL_SOCKET_ERROR);
     }else if(s->status == _SS_CONNECTING){
-        _rsp_socket(s->st, s, s->source, s->session, DDCL_SOCKET_ERROR);
+        if(s->session){
+            _rsp_socket(s->st, s, s->source, s->session, DDCL_SOCKET_ERROR);
+        }
     }
 
     ddcl_wlock_rw(&(_H.lock));
@@ -419,6 +421,10 @@ _find_socket(ddcl_Socket h){
 
 static void
 _execute_event_in_fd_connecting(SocketThread * st, Socket * s, int evt){
+    if(evt & DDSOCKETPOLL_ERROR){
+        _del_fd(s);
+        return;
+    }
     if(evt & DDSOCKETPOLL_WRITE){
 #if defined(DDSYS_LINUX) && defined(DDSOCKETPOLL_USE_SELECT)
         int error;
@@ -433,10 +439,12 @@ _execute_event_in_fd_connecting(SocketThread * st, Socket * s, int evt){
             _add_evt_2_poll(st->poll, s, DDSOCKETPOLL_ERROR);
             _del_evt_in_poll(st->poll, s, DDSOCKETPOLL_WRITE);
             _rsp_socket(st, s, s->source, s->session, DDCL_SOCKET_READ);
+            s->session = 0;
         }
     }
     if(evt & DDSOCKETPOLL_ERROR){
         _del_fd(s);
+        return;
     }
 }
 

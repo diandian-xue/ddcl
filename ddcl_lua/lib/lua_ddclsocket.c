@@ -107,6 +107,7 @@ l_read_socket (lua_State * L){
     if(err){
         return luaL_error(L, ddcl_err(err));
     }
+    printf("read session:%d\n", session);
     return lddcl_yield_for_session(L, ctx, session);
 }
 

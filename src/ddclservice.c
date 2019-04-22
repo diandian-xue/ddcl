@@ -529,9 +529,11 @@ ddcl_timeout (ddcl_Service h, ddcl_Session * session, dduint32 ms){
     if(!svr){
         return DDCL_SERVICE_UNKNOW_HANDLE;
     }
-    ddcl_Session sn = _new_session(svr);
-    if(session)
+    ddcl_Session sn = 0;
+    if(session){
+        sn = _new_session(svr);
         *session = sn;
+    }
     ddcl_add_timeout(h, sn, ms);
     return 0;
 }

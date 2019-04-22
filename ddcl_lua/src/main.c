@@ -1,3 +1,4 @@
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -63,6 +64,9 @@ parse_args (int argc, char ** argv){
             CHECK_ARGV(i, argc);
             LUACPATH_ARGV[LUACPATH_ARGV_I++] = argv[i];
             break;
+        default:
+            return 1;
+            break;
 
         }
         i ++;
@@ -84,12 +88,13 @@ int main (int argc, char **argv) {
 
     int ret = parse_args(argc, argv);
     if(ret){
-        sprintf(stderr, "args error %d\n", ret);
+        fprintf(stderr, "args error %d\n", ret);
         return ret;
     }
 
     ddcl conf;
     ddcl_default(&conf);
+    conf.timer_ms = 5;
     ddcl_init(&conf);
 
     lddcl_set_newservice_hook(open_dd_library);
@@ -134,3 +139,4 @@ int main (int argc, char **argv) {
     return 0;
 
 }
+

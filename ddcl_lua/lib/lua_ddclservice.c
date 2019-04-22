@@ -56,7 +56,7 @@ _push_dson2state(lua_State * L, ddcl_DsonBuffer * dson){
 }
 
 static void
-_resume_coroutine (Context * ctx, lua_State *L, lua_State * from, int top){
+_resume_coroutine (Context * ctx, lua_State *L, lua_State * lfrom, int top){
     int ret = lua_resume(L, NULL, top);
     int has_err = 0;
     int has_complete = 0;
@@ -73,7 +73,7 @@ _resume_coroutine (Context * ctx, lua_State *L, lua_State * from, int top){
     }
     if(has_err){
         const char * errstr = lua_tostring(L, -1);
-        luaL_traceback(L, from ? from : L, errstr, 0);
+        luaL_traceback(L, lfrom ? lfrom : L, errstr, 0);
         size_t errsz;
         errstr = lua_tolstring(L, -1, &errsz);
 
@@ -184,26 +184,31 @@ _excute_resp_msg(ddcl_Msg * msg){
 
     }
 
+	lua_State * nL = NULL;
+	if (msg->cmd == DDCL_CMD_ERROR) {
+		if (lua_type(L, -1) == LUA_TTHREAD) {
+			nL = lua_tothread(L, -1);
+		}
+		lua_rawgetp(L, LUA_REGISTRYINDEX, &ctx->session_map);
+		lua_pushinteger(L, msg->session);
+		lua_pushnil(L);
+		lua_rawset(L, -3);
+		luaL_traceback(L, nL?nL:L, msg->data, 0);
+		ddcl_log(ctx->svr, "call faild:\n%s", lua_tostring(L, -1));
+		return 0;
+	}
+
     switch(lua_type(L, -1)){
         case LUA_TFUNCTION:
             return _callmsg_in_coroutine(msg, NULL);
         case LUA_TTHREAD:
+			nL = lua_tothread(L, -1);
             break;
         default:
             ddcl_log(ctx->svr, "unknow session[%d] for resp msg", msg->session);
             return 0;
     }
 
-    lua_State * nL = lua_tothread(L, -1);
-    if(msg->cmd == DDCL_CMD_ERROR){
-        lua_rawgetp(L, LUA_REGISTRYINDEX, &ctx->session_map);
-        lua_pushinteger(L, msg->session);
-        lua_pushnil(L);
-        lua_rawset(L, -3);
-        luaL_traceback(L, nL, msg->data, 0);
-        ddcl_log(ctx->svr, "call faild:\n%s", lua_tostring(L, -1));
-        return 0;
-    }
     lua_settop(nL, 0);
     if(msg->ptype & DDCL_PTYPE_DSON){
         int count = _push_dson2state(nL, (ddcl_DsonBuffer *)msg->data);
@@ -571,7 +576,7 @@ l_log (lua_State * L){
 }
 
 static int
-l_fork (lua_State * L){
+l_co_fork (lua_State * L){
     LDDCL_FIND_CTX;
     luaL_checktype(L, 1, LUA_TFUNCTION);
 
@@ -662,7 +667,7 @@ openlib_service (lua_State * L){
     DDLUA_PUSHFUNC(L, "resp", l_resp);
     DDLUA_PUSHFUNC(L, "timeout", l_timeout);
     DDLUA_PUSHFUNC(L, "log", l_log);
-    DDLUA_PUSHFUNC(L, "fork", l_fork);
+    DDLUA_PUSHFUNC(L, "co_fork", l_co_fork);
     DDLUA_PUSHFUNC(L, "co_sleep", l_co_sleep);
     DDLUA_PUSHFUNC(L, "co_running", l_co_running);
     DDLUA_PUSHFUNC(L, "co_resume", l_co_resume);

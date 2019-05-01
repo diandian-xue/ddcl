@@ -2,7 +2,8 @@
 
 #include "ddcl.h"
 #include "ddcltimer.h"
-#include "lua_ddcl.h"
+#include "ddclmalloc.h"
+#include "luaddcl.h"
 
 #include <stdio.h>
 
@@ -69,12 +70,33 @@ l_packstring(lua_State * L){
     return 0;
 }
 
+static int
+l_malloc (lua_State * L){
+    lua_Integer size = luaL_checkinteger(L, 1);
+    void * p = ddcl_malloc(size);
+    lua_pushlightuserdata(L, p);
+    lua_pushinteger(L, size);
+    return 2;
+}
+
+static int
+l_free (lua_State * L){
+    if(!lua_islightuserdata(L, 1)){
+        return luaL_error(L, "param error #1, lightuserdata got %s",
+                lua_typename(L, lua_type(L, 1)));
+    }
+    ddcl_free(lua_touserdata(L, 1));
+    return 0;
+}
+
 static luaL_Reg _reg[] = {
     { "init", l_init },
     { "final", l_final },
     { "now", l_now },
     { "systime", l_systime },
     { "packstring", l_packstring },
+    { "malloc", l_malloc },
+    { "free", l_free },
     { NULL, NULL },
 };
 
@@ -91,8 +113,11 @@ openlib_service (lua_State * L);
 extern int
 openlib_socket (lua_State * L);
 
+int
+openlib_named (lua_State * L);
+
 DDCLLUA int
-luaopen_ddcllua_core (lua_State * L){
+luaopen_libluaddcl_core (lua_State * L){
     luaL_checkversion(L);
     DDLUA_NEWLIB(L, "luaddcl.core", _reg);
 
@@ -100,6 +125,7 @@ luaopen_ddcllua_core (lua_State * L){
     openlib_thread(L);
     openlib_service(L);
     openlib_socket(L);
+    openlib_named(L);
 
     return 1;
 }

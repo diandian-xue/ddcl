@@ -2,9 +2,9 @@
 
 #include "ddclservice.h"
 #include "ddcldson.h"
-#include "lua_ddcl.h"
+#include "luaddcl.h"
 
-#define LDDCL_CTX_K "lddcl_service_context"
+extern int LDDCL_CTX_K; //"luaddcl_service_context"
 
 typedef struct tag_Context{
     lua_State * L;
@@ -16,15 +16,18 @@ typedef struct tag_Context{
     int unknow;
     int startfn;
     int callback;
+
+    // [session] = lua_State or lua_Function
     int session_map;
+
+    // [lua_State] = {source, session}
     int co_map;
 }Context;
 
 #define LDDCL_FIND_CTX \
 Context * ctx = NULL; \
 { \
-    lua_pushstring(L, LDDCL_CTX_K); \
-    lua_rawget(L, LUA_REGISTRYINDEX); \
+    lua_rawgetp(L, LUA_REGISTRYINDEX, &LDDCL_CTX_K); \
     if(lua_isnil(L, -1)){ \
         lua_pop(L, 1); \
         return luaL_error(L, "can not found context"); \
@@ -43,5 +46,6 @@ lddcl_set_newservice_hook(lua_CFunction f);
 
 DDCLLUA ddcl_Service
 lddcl_new_luaservice (lua_State * L,
-        const char * path, const char * cpath,
-        const char * script, const char * param);
+        const char * path[], const char * cpath[],
+        const char * script, ddcl_DsonBuffer * dson,
+        ddcl_Service from, ddcl_Session session);

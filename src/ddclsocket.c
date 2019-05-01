@@ -127,25 +127,24 @@ static dduint32 _TCOUNT = 0;
 
 static void
 _rsp_socket(SocketThread * st, Socket * s,
-        ddcl_Service source, ddcl_Session session, int cmd){
+        ddcl_Service source, ddcl_Session session, int cmd, ddcl_Socket fd){
 
     ddcl_DsonBuffer * dson = st->dson;
     ddcl_clear_dsonbuffer(dson);
-    ddcl_push_dsonbuffer_integer(dson, s->h);
-    ddcl_push_dsonbuffer_integer(dson, cmd);
-    size_t len;
-    char * buffer = ddcl_dsonbuffer_buffer(dson, &len);
-
-    //ddcl_SocketRsp rsp;
-    //rsp.fd = s->h;
-    //rsp.cmd = cmd;
-    //rsp.sz = 0;
-    //ddcl_send_b(source, st->svr, session ? DDCL_PTYPE_RESP : DDCL_PTYPE_SEND,
-    //    DDCL_CMD_SOCKET, session, (char *)&rsp, sizeof(rsp));
+    dson = ddcl_push_dsonbuffer_integer(dson, s->h);
+    dson = ddcl_push_dsonbuffer_integer(dson, cmd);
+	if (fd) {
+		dson = ddcl_push_dsonbuffer_integer(dson, fd);
+	}
+    st->dson = dson;
+    size_t len = ddcl_dsonbuffer_len(dson);
     int ptype = session ? DDCL_PTYPE_RESP : DDCL_PTYPE_SEND;
     ptype |= DDCL_PTYPE_DSON;
+    if(s->forward){
+        ptype |= DDCL_PTYPE_KEEP_SS;
+    }
     ddcl_send_b(source, st->svr,
-            ptype, DDCL_CMD_SOCKET, session, buffer, len);
+            ptype, DDCL_CMD_SOCKET, session, (void *)dson, len);
 }
 
 static void
@@ -153,18 +152,21 @@ _rsp_read(SocketThread * st, Socket * s, ddcl_Service source,
     ddcl_Session session, int cmd, char * data, size_t sz){
     ddcl_DsonBuffer * dson = st->dson;
     ddcl_clear_dsonbuffer(dson);
-    ddcl_push_dsonbuffer_integer(dson, s->h);
-    ddcl_push_dsonbuffer_integer(dson, cmd);
+    dson = ddcl_push_dsonbuffer_integer(dson, s->h);
+    dson = ddcl_push_dsonbuffer_integer(dson, cmd);
     if(data){
-        ddcl_push_dsonbuffer_string(dson, data, sz);
-        ddcl_push_dsonbuffer_integer(dson, sz);
+        dson = ddcl_push_dsonbuffer_string(dson, data, sz);
+        dson = ddcl_push_dsonbuffer_integer(dson, sz);
     }
-    size_t len;
-    char * buffer = ddcl_dsonbuffer_buffer(dson, &len);
+    st->dson = dson;
+    size_t len = ddcl_dsonbuffer_len(dson);
     int ptype = session ? DDCL_PTYPE_RESP : DDCL_PTYPE_SEND;
     ptype |= DDCL_PTYPE_DSON;
+    if(s->forward){
+        ptype |= DDCL_PTYPE_KEEP_SS;
+    }
     ddcl_send_b(source, st->svr, ptype,
-        DDCL_CMD_SOCKET, session, buffer, len);
+        DDCL_CMD_SOCKET, session, (void *)dson, len);
 }
 
 static char *
@@ -395,10 +397,12 @@ _del_fd (Socket * s){
     _free_read_buff(s, s->rbuf);
 
     if(s->forward){
-        _rsp_socket(s->st, s, s->source, 0, DDCL_SOCKET_ERROR);
+        _rsp_socket(s->st, s, s->source, s->session, DDCL_SOCKET_ERROR, 0);
+        ddcl_send(s->source, s->st->svr, DDCL_PTYPE_RESP,
+                DDCL_CMD_DEL_SESSION, s->session, NULL, 0);
     }else if(s->status == _SS_CONNECTING){
         if(s->session){
-            _rsp_socket(s->st, s, s->source, s->session, DDCL_SOCKET_ERROR);
+            _rsp_socket(s->st, s, s->source, s->session, DDCL_SOCKET_ERROR, 0);
         }
     }
 
@@ -438,7 +442,7 @@ _execute_event_in_fd_connecting(SocketThread * st, Socket * s, int evt){
             s->status = _SS_CONNECTED;
             _add_evt_2_poll(st->poll, s, DDSOCKETPOLL_ERROR);
             _del_evt_in_poll(st->poll, s, DDSOCKETPOLL_WRITE);
-            _rsp_socket(st, s, s->source, s->session, DDCL_SOCKET_READ);
+            _rsp_socket(st, s, s->source, s->session, DDCL_SOCKET_READ, 0);
             s->session = 0;
         }
     }
@@ -455,7 +459,7 @@ _connected_event_by_forward (SocketThread * st, Socket * s, int evt){
         for(;;){
             rsz = recv(s->fd, s->crbuf, DEFAULT_RECV_SIZE, 0);
             if(rsz > 0){
-                _rsp_read(st, s, s->source, 0,
+                _rsp_read(st, s, s->source, s->session,
                         DDCL_SOCKET_READ, s->crbuf, rsz);
                 if(rsz < DEFAULT_RECV_SIZE){
                     break;
@@ -478,6 +482,29 @@ _connected_event_by_forward (SocketThread * st, Socket * s, int evt){
             }
         }
     }
+    if (evt & DDSOCKETPOLL_WRITE) {
+        SendBuff* sb = s->sbuf;
+        size_t slen = 0;
+        int n;
+        while (sb) {
+            n = send(s->fd, sb->buf + slen, (int)(sb->sz - slen), 0);
+            if (n <= 0) {
+                sb->buf += slen;
+                sb->sz -= slen;
+                break;
+            }
+            slen += n;
+            if (slen >= sb->sz) {
+                slen = 0;
+                sb = _pop_send_buff(s);
+                continue;
+            }
+        }
+        if (!sb) {
+            _del_evt_in_poll(st->poll, s, DDSOCKETPOLL_WRITE);
+        }
+    }
+
     if(!s){
         return;
     }
@@ -593,11 +620,9 @@ _listening_event_by_forward (SocketThread * st, Socket * s, int evt){
             _set_non_blocking(nfd);
 
             ns = _register_fd(nfd, _SS_CONNECTED);
-            ns->source = s->source;
-            ns->session = s->session;
             _add_in_poll(ns->h, ns, DDSOCKETPOLL_ERROR);
             ns->poll_evt = DDSOCKETPOLL_ERROR;
-            _rsp_socket(st, ns, s->source, 0, DDCL_SOCKET_ACCEPT);
+            _rsp_socket(st, s, s->source, s->session, DDCL_SOCKET_ACCEPT, ns->h);
         }
     }
 }
@@ -633,11 +658,9 @@ _execute_event_on_fd_listening(SocketThread * st, Socket * s, int evt){
             _set_non_blocking(nfd);
 
             ns = _register_fd(nfd, _SS_CONNECTED);
-            ns->source = s->source;
-            ns->session = s->session;
             _add_in_poll(ns->h, ns, DDSOCKETPOLL_ERROR);
             ns->poll_evt = DDSOCKETPOLL_ERROR;
-            _rsp_socket(st, ns, rb->source, rb->session, DDCL_SOCKET_ACCEPT);
+            _rsp_socket(st, s, rb->source, rb->session, DDCL_SOCKET_ACCEPT, ns->h);
 
             rb = _pop_read_buff(s);
         }
@@ -710,7 +733,8 @@ _timeout_wait_poll(ddcl_Msg * msg){
 static void
 _exit_module(ddcl_Msg * msg){
     SocketThread * st = msg->ud;
-    ddcl_free_socket_poll(st->poll);
+    ddcl_free_socket_poll(st->poll); 
+    ddcl_free_dsonbuffer(st->dson);
     ddcl_exit_service(st->svr);
 }
 
@@ -862,11 +886,9 @@ _excute_accept_cmd(SocketCmd * cmd, ddcl_Service source, ddcl_Session session){
         _set_keepalive(fd);
         _set_non_blocking(fd);
         Socket *ns = _register_fd(fd, _SS_CONNECTED);
-        ns->source = s->source;
-        ns->session = s->session;
         _add_in_poll(ns->h, ns, DDSOCKETPOLL_ERROR);
         ns->poll_evt = DDSOCKETPOLL_ERROR;
-        _rsp_socket(ns->st, ns, source, session, DDCL_SOCKET_ACCEPT);
+        _rsp_socket(ns->st, s, source, session, DDCL_SOCKET_ACCEPT, ns->h);
     }else{
         _push_read_buff(s, 0, source, session);
         if(!(s->poll_evt & DDSOCKETPOLL_READ))
@@ -883,6 +905,8 @@ _excute_forward_cmd (SocketCmd * cmd, ddcl_Service source, ddcl_Session session)
         return;
     }
     s->forward = 1;
+    s->session = session;
+    s->source = source;
     _add_evt_2_poll(s->st->poll, s, DDSOCKETPOLL_READ | DDSOCKETPOLL_ERROR);
 }
 
@@ -966,8 +990,8 @@ DDCLAPI void
 ddcl_exit_socket_module (){
     for (dduint32 i = 0; i < _TCOUNT; i ++){
         SocketThread * st = &(_T[i]);
-        ddcl_free_socket_poll(st->poll);
-        ddcl_free_dsonbuffer(st->dson);
+        //ddcl_free_socket_poll(st->poll);
+        //ddcl_free_dsonbuffer(st->dson);
         st->exit = 1;
         ddcl_send(st->svr, 0, DDCL_PTYPE_SEND, DDCL_CMD_EXIT, 0, NULL, 0);
     }
@@ -1199,7 +1223,7 @@ ddcl_getall_socket_count(){
 }
 
 DDCLAPI int
-ddcl_forward_socket (ddcl_Socket fd, ddcl_Service from){
+ddcl_forward_socket (ddcl_Socket fd, ddcl_Service from, ddcl_Session * session){
     Socket * s = _find_socket(fd);
     if (!s)
         return DDCLSOCKET_INVALID_HANDLE;
@@ -1209,8 +1233,8 @@ ddcl_forward_socket (ddcl_Socket fd, ddcl_Service from){
     cmd.h = fd;
     cmd.fd = s->fd;
     SocketThread * st = _st_find(fd);
-    ddcl_send_b(st->svr, from, DDCL_PTYPE_SEND,
-        DDCL_CMD_SOCKET, 0, (char *)&cmd, sizeof(SocketCmd));
+    ddcl_call_b(st->svr, from, DDCL_PTYPE_SEND,
+        DDCL_CMD_SOCKET, session, (char *)&cmd, sizeof(SocketCmd));
     return DDCL_OK;
 }
 

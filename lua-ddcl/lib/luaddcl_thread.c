@@ -3,7 +3,7 @@
 #include "ddclmalloc.h"
 #include "ddclthread.h"
 
-#include "lua_ddcl.h"
+#include "luaddcl.h"
 
 #include <stdlib.h>
 #include <stdio.h>

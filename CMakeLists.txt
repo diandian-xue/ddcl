@@ -6,5 +6,5 @@ set(LIBRARY_OUTPUT_PATH ${PROJECT_BINARY_DIR})
 
 
 include(ddcl.cmake)
-add_subdirectory(ddcl_lua/ ddcl_lua)
+add_subdirectory(lua-ddcl/ lua-ddcl)
 

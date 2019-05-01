@@ -47,5 +47,5 @@
 
 
 DDCLLUA int
-luaopen_ddcllua_core(lua_State * L);
+luaopen_libluaddcl_core (lua_State * L);
 

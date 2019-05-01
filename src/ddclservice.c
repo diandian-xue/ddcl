@@ -156,7 +156,6 @@ _push_service_queue (Service * svr, ddcl_Service self, int ptype,
     msg->sz = sz;
     msg->cmd = cmd;
     msg->free = free;
-   
     if (++svr->tail >= svr->cap) {
         svr->tail = 0;
     }
@@ -188,6 +187,7 @@ _pop_service_queue (Service * svr, ddcl_Msg * msg, int max) {
         }
     }
     if(svr->queue_count == 0 && svr->cap > (DEFAULT_QUEUE_SIZE * 2)){
+        ddcl_log(svr->handle, "resize queue size");
         svr->cap = DEFAULT_QUEUE_SIZE;
         ddcl_free(svr->queue);
         svr->queue = ddcl_malloc(sizeof(ddcl_Msg) * svr->cap);

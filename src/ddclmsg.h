@@ -3,7 +3,8 @@
 enum {
     DDCL_PTYPE_SEND = 1,
     DDCL_PTYPE_RESP = 1 << 1,
-    DDCL_PTYPE_DSON = 1 << 2,
+    DDCL_PTYPE_DSON = 1 << 2, //dson 格式数据标识
+    DDCL_PTYPE_KEEP_SS = 1 << 3, //保留session标识
 
     DDCL_PTYPE_END,
 };
@@ -16,6 +17,7 @@ enum {
     DDCL_CMD_SOCKET,
     DDCL_CMD_LOG,
     DDCL_CMD_START,
+    DDCL_CMD_DEL_SESSION,
 
     DDCL_CMD_END,
 };

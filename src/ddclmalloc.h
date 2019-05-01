@@ -6,7 +6,7 @@
 
 #ifdef DDMALLOC_RECORD
     #define ddcl_malloc(sz) ddcl_mallocR(sz, __FILE__, __LINE__)
-    #define ddcl_free(p) ddcl_freeR(p)
+    #define ddcl_free(p) ddcl_freeR(p, __FILE__, __LINE__)
 
     #define ddcl_mallocfn       ddcl_mallocR
     #define ddcl_freefn     ddcl_freeR
@@ -30,7 +30,7 @@ DDCLAPI void *
 ddcl_mallocR(size_t sz, char * r, int line);
 
 DDCLAPI void
-ddcl_freeR(void * p);
+ddcl_freeR(void * p, char * r, int line);
 
 DDCLAPI void *
 ddcl_realloc(void * p, size_t sz);

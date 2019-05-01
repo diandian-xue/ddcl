@@ -5,7 +5,7 @@
 #include "ddclservice.h"
 
 enum{
-	DDCL_SOCKET_CONNECT = 0,
+    DDCL_SOCKET_CONNECT = 0,
     DDCL_SOCKET_ACCEPT,
     DDCL_SOCKET_READ,
     DDCL_SOCKET_ERROR,
@@ -47,4 +47,4 @@ DDCLAPI dduint32
 ddcl_getall_socket_count();
 
 DDCLAPI int
-ddcl_forward_socket (ddcl_Socket fd, ddcl_Service from);
+ddcl_forward_socket (ddcl_Socket fd, ddcl_Service from, ddcl_Session * session);

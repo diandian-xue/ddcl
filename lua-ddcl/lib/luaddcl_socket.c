@@ -3,8 +3,8 @@
 #include "ddclsocket.h"
 #include "ddclerr.h"
 
-#include "lua_ddcl.h"
-#include "lua_ddclservice.h"
+#include "luaddcl.h"
+#include "luaddcl_service.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -107,7 +107,6 @@ l_read_socket (lua_State * L){
     if(err){
         return luaL_error(L, ddcl_err(err));
     }
-    printf("read session:%d\n", session);
     return lddcl_yield_for_session(L, ctx, session);
 }
 
@@ -143,10 +142,17 @@ static int
 l_forward_socket (lua_State * L){
     LDDCL_FIND_CTX;
     ddcl_Socket fd = (ddcl_Socket)luaL_checkinteger(L, 1);
-    int err = ddcl_forward_socket(fd, ctx->svr);
+    luaL_checktype(L,  2, LUA_TFUNCTION);
+    ddcl_Session session;
+    int err = ddcl_forward_socket(fd, ctx->svr, &session);
     if(err){
         return luaL_error(L, ddcl_err(err));
     }
+    lua_rawgetp(L, LUA_REGISTRYINDEX, &ctx->session_map);
+    lua_pushinteger(L, session);
+    lua_pushvalue(L, 2);
+    lua_rawset(L, -3);
+    lua_pop(L, 1);
     return 0;
 }
 

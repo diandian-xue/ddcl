@@ -37,12 +37,11 @@
  */
 
 
+#include "lua_cjson.h"
 #include <assert.h>
 #include <string.h>
 #include <math.h>
 #include <limits.h>
-#include <lua.h>
-#include <lauxlib.h>
 
 #include "strbuf.h"
 #include "fpconv.h"
@@ -63,16 +62,6 @@
 #if defined(_WIN32) || defined(_WIN64)
 # define strncasecmp _strnicmp
 # endif
-
-#if defined(_WIN32) || defined(_WIN64)
-    #ifdef LUA_CJSON_EXPORTS
-        #define LUA_CJSON_API    __declspec(dllexport)
-    #else
-        #define LUA_CJSON_API
-    #endif
-#else
-    #define LUA_CJSON_API
-#endif
 
 
 #define DEFAULT_SPARSE_CONVERT 0

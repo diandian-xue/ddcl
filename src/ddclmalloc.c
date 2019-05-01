@@ -43,13 +43,13 @@ ddcl_mallocR(size_t sz, char * r, int line){
 }
 
 DDCLAPI void
-ddcl_freeR(void * p){
+ddcl_freeR (void * p, char * r, int line){
     free(p);
     ddcl_lock_spin(&_lock);
     int ret = ddcl_set_map(_map, &p, sizeof(void *), NULL, 0);
-	if (!ret) {
-		printf("not found free: %p\n", p);
-	}
+    if (!ret) {
+        printf("not found free: %p %s:%d \n", p, r, line);
+    }
     ddcl_unlock_spin(&_lock);
 }
 

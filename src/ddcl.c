@@ -26,9 +26,9 @@ ddcl_init (ddcl * conf){
 
 DDCLAPI void
 ddcl_final (){
-    ddcl_exit_socket_module();
-    ddcl_exit_service_module();
-    ddcl_exit_timer_module();
+	ddcl_exit_timer_module();
+	ddcl_exit_socket_module();
+	ddcl_exit_service_module();
 
     ddcl_print_storage_info();
     ddcl_exit_storage_module();
